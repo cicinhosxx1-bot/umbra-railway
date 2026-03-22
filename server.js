@@ -252,6 +252,177 @@ app.get('/api/download', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ── Análise avançada de canal ─────────────────────────────────────────────────
+app.get('/api/channel-deep', async (req, res) => {
+  try {
+    const { id } = req.query;
+    if (!id) return res.status(400).json({ error: 'id obrigatorio' });
+
+    const [chData, plData] = await Promise.all([
+      poolFetch(POOLS.yt_main, `https://${POOLS.yt_main.host}/channels?part=snippet%2Cstatistics%2CbrandingSettings&id=${encodeURIComponent(id)}`),
+      poolFetch(POOLS.yt_main, `https://${POOLS.yt_main.host}/channels?part=contentDetails&id=${encodeURIComponent(id)}`),
+    ]);
+
+    const ch = chData.items?.[0];
+    if (!ch) return res.status(404).json({ error: 'Canal nao encontrado' });
+
+    const playlistId = plData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+    let videos = [];
+
+    if (playlistId) {
+      const plItems = await poolFetch(POOLS.yt_main,
+        `https://${POOLS.yt_main.host}/playlistItems?part=snippet&playlistId=${playlistId}&maxResults=20`);
+      const ids = (plItems.items || []).map(i => i.snippet.resourceId.videoId).join(',');
+      if (ids) {
+        const vData = await poolFetch(POOLS.yt_main,
+          `https://${POOLS.yt_main.host}/videos?part=snippet%2Cstatistics%2CcontentDetails&id=${ids}`);
+        videos = (vData.items || []).map(v => ({
+          videoId: v.id,
+          title: v.snippet.title,
+          thumbnail: v.snippet.thumbnails?.medium?.url,
+          publishedAt: v.snippet.publishedAt,
+          duration: v.contentDetails.duration,
+          views: parseInt(v.statistics.viewCount || 0),
+          likes: parseInt(v.statistics.likeCount || 0),
+          comments: parseInt(v.statistics.commentCount || 0),
+        }));
+      }
+    }
+
+    const totalViews   = parseInt(ch.statistics.viewCount || 0);
+    const videoCount   = parseInt(ch.statistics.videoCount || 1);
+    const avgViewsPerVideo = Math.round(totalViews / videoCount);
+
+    const engagements  = videos.map(v => v.views > 0 ? ((v.likes + v.comments) / v.views) * 100 : 0);
+    const avgEngagement = engagements.length > 0
+      ? (engagements.reduce((a,b) => a+b, 0) / engagements.length).toFixed(2) : '0';
+
+    const bestVideo  = videos.reduce((b, v) => (!b || v.views > b.views) ? v : b, null);
+    const worstVideo = videos.reduce((b, v) => (!b || v.views < b.views) ? v : b, null);
+
+    let uploadFreqDays = null;
+    if (videos.length >= 2) {
+      const dates = videos.map(v => new Date(v.publishedAt)).sort((a,b) => b-a);
+      const diffs = [];
+      for (let i = 0; i < dates.length - 1; i++) diffs.push((dates[i]-dates[i+1])/(1000*60*60*24));
+      uploadFreqDays = Math.round(diffs.reduce((a,b)=>a+b,0) / diffs.length);
+    }
+
+    const dayCount = {0:0,1:0,2:0,3:0,4:0,5:0,6:0};
+    const hourBuckets = {};
+    videos.forEach(v => {
+      const d = new Date(v.publishedAt);
+      dayCount[d.getDay()] = (dayCount[d.getDay()] || 0) + v.views;
+      const h = d.getUTCHours();
+      hourBuckets[h] = (hourBuckets[h] || 0) + v.views;
+    });
+    const bestDay  = Object.entries(dayCount).sort((a,b) => b[1]-a[1])[0]?.[0];
+    const bestHour = Object.entries(hourBuckets).sort((a,b) => b[1]-a[1])[0]?.[0];
+    const dayNames = ['Domingo','Segunda','Terca','Quarta','Quinta','Sexta','Sabado'];
+
+    let trend = 'estavel';
+    if (videos.length >= 4) {
+      const half   = Math.floor(videos.length/2);
+      const recent = videos.slice(0, half);
+      const older  = videos.slice(half);
+      const avgR   = recent.reduce((s,v)=>s+v.views,0)/recent.length;
+      const avgO   = older.reduce((s,v)=>s+v.views,0)/older.length;
+      const pct    = ((avgR-avgO)/avgO)*100;
+      if (pct > 15)       trend = `crescendo ${pct.toFixed(0)}%`;
+      else if (pct < -15) trend = `caindo ${Math.abs(pct).toFixed(0)}%`;
+      else                trend = 'estavel';
+    }
+
+    res.json({
+      id: ch.id, title: ch.snippet.title, description: ch.snippet.description,
+      thumbnail: ch.snippet.thumbnails?.high?.url, country: ch.snippet.country,
+      publishedAt: ch.snippet.publishedAt, subscribers: ch.statistics.subscriberCount,
+      views: ch.statistics.viewCount, videoCount: ch.statistics.videoCount,
+      avgViewsPerVideo, avgEngagement, uploadFreqDays,
+      bestDay:  bestDay  !== undefined ? dayNames[bestDay]  : null,
+      bestHour: bestHour !== undefined ? `${bestHour}h-${parseInt(bestHour)+2}h UTC` : null,
+      trend, bestVideo, worstVideo, recentVideos: videos,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Engenharia reversa de vídeo ───────────────────────────────────────────────
+app.get('/api/reverse-engineer', async (req, res) => {
+  try {
+    const { id } = req.query;
+    if (!id) return res.status(400).json({ error: 'id obrigatorio' });
+
+    const data = await poolFetch(POOLS.yt_main,
+      `https://${POOLS.yt_main.host}/videos?part=snippet%2Cstatistics%2CcontentDetails&id=${encodeURIComponent(id)}`);
+    const v = data.items?.[0];
+    if (!v) return res.status(404).json({ error: 'Video nao encontrado' });
+
+    const views    = parseInt(v.statistics.viewCount    || 0);
+    const likes    = parseInt(v.statistics.likeCount    || 0);
+    const comments = parseInt(v.statistics.commentCount || 0);
+    const engagement  = views > 0 ? (((likes+comments)/views)*100).toFixed(2) : '0';
+    const likeRatio   = views > 0 ? ((likes/views)*100).toFixed(2) : '0';
+    const commentRatio= views > 0 ? ((comments/views)*100).toFixed(3) : '0';
+
+    const title    = v.snippet.title;
+    const titleLen = title.length;
+    const hasNumber   = /\d+/.test(title);
+    const hasYear     = /202[0-9]/.test(title);
+    const hasQuestion = /\?/.test(title);
+    const hasPowerWord= /melhor|pior|incrivel|segredo|nunca|sempre|como|por que|gratis|dinheiro|rico|viral|best|worst|secret|never|always|how|why|free|money|rich|amazing|shocking|exposed/i.test(title);
+    const hasEmoji    = title.length !== Buffer.byteLength(title, 'utf8') / 1 && /[^\x00-\x7F]/.test(title);
+    const titleWords  = title.split(' ').length;
+
+    let titleScore = 50;
+    if (titleLen >= 40 && titleLen <= 70) titleScore += 15;
+    if (hasNumber)    titleScore += 10;
+    if (hasYear)      titleScore += 5;
+    if (hasQuestion)  titleScore += 10;
+    if (hasPowerWord) titleScore += 15;
+    if (hasEmoji)     titleScore += 5;
+    if (titleWords >= 5 && titleWords <= 12) titleScore += 5;
+    titleScore = Math.min(titleScore, 99);
+
+    const durMatch = v.contentDetails.duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    const totalSec = (parseInt(durMatch?.[1]||0)*3600)+(parseInt(durMatch?.[2]||0)*60)+parseInt(durMatch?.[3]||0);
+    let durationTip = '';
+    if      (totalSec < 60)   durationTip = 'Short/Reel — otimo para retencao e loop';
+    else if (totalSec < 300)  durationTip = 'Video curto (1-5min) — alto CTR, monetizacao limitada';
+    else if (totalSec < 900)  durationTip = 'Video medio (5-15min) — equilibrio ideal de retencao e ads';
+    else if (totalSec < 1800) durationTip = 'Video longo (15-30min) — mais mid-rolls, boa monetizacao';
+    else                      durationTip = 'Video muito longo (+30min) — nicho especifico, alto CPM potencial';
+
+    const pubDate  = new Date(v.snippet.publishedAt);
+    const dayNames = ['Domingo','Segunda','Terca','Quarta','Quinta','Sexta','Sabado'];
+    const pubDay   = dayNames[pubDate.getDay()];
+    const pubHour  = pubDate.getUTCHours();
+
+    let viralScore = 0;
+    if      (views > 1000000) viralScore += 30;
+    else if (views > 100000)  viralScore += 20;
+    else if (views > 10000)   viralScore += 10;
+    if      (parseFloat(likeRatio) > 5)    viralScore += 20;
+    else if (parseFloat(likeRatio) > 2)    viralScore += 10;
+    if      (parseFloat(commentRatio) > 0.5) viralScore += 20;
+    else if (parseFloat(commentRatio) > 0.1) viralScore += 10;
+    viralScore += Math.round(titleScore * 0.3);
+    viralScore = Math.min(viralScore, 99);
+
+    const tags    = v.snippet.tags || [];
+    const descLen = (v.snippet.description || '').length;
+
+    res.json({
+      id: v.id, title, channelTitle: v.snippet.channelTitle,
+      thumbnail: v.snippet.thumbnails?.maxres?.url || v.snippet.thumbnails?.high?.url,
+      publishedAt: v.snippet.publishedAt, duration: v.contentDetails.duration, totalSeconds: totalSec,
+      views, likes, comments, engagement, likeRatio, commentRatio, viralScore,
+      titleAnalysis: { score: titleScore, length: titleLen, wordCount: titleWords, hasNumber, hasYear, hasQuestion, hasPowerWord, hasEmoji },
+      durationTip, pubDay, pubHour, tags, tagCount: tags.length, descriptionLength: descLen,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Fallback → index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
