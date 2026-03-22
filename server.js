@@ -214,13 +214,54 @@ app.get('/api/compare', async (req, res) => {
 
 app.get('/api/search', async (req, res) => {
   try {
-    const { q, max = 12 } = req.query;
-    if (!q) return res.status(400).json({ error: 'q obrigatorio' });
+    const { q='', max=12, nicho='', subnicho='', idioma='', periodo='', videos='', order='relevance' } = req.query;
+
+    // Build enriched query combining user input + nicho/subnicho filters
+    const parts = [];
+    if (q.trim()) parts.push(q.trim());
+    if (subnicho) parts.push(subnicho);
+    else if (nicho) parts.push(nicho);
+    const finalQ = parts.join(' ') || 'videos';
+
+    // Build URL params
+    const params = new URLSearchParams({
+      part: 'snippet',
+      q: finalQ,
+      maxResults: max,
+      type: 'video',
+      order,
+    });
+
+    // Language/region filter
+    if (idioma) params.set('relevanceLanguage', idioma);
+
+    // Duration filter
+    if (videos === 'short')  params.set('videoDuration', 'short');
+    if (videos === 'medium') params.set('videoDuration', 'medium');
+    if (videos === 'long')   params.set('videoDuration', 'long');
+
+    // Published after filter
+    if (periodo) {
+      const now = new Date();
+      const map = {
+        today:    1, week: 7, '2weeks': 14,
+        month:    30, '3months': 90,
+        '6months':180, year: 365,
+      };
+      const days = map[periodo];
+      if (days) {
+        const d = new Date(now - days * 864e5);
+        params.set('publishedAfter', d.toISOString());
+      }
+    }
+
     const data = await poolFetch(POOLS.yt_main,
-      `https://${POOLS.yt_main.host}/search?part=snippet&q=${encodeURIComponent(q)}&maxResults=${max}&type=video&order=relevance`);
+      `https://${POOLS.yt_main.host}/search?${params.toString()}`);
     res.json((data.items||[]).map(item => ({
-      videoId: item.id.videoId, title: item.snippet.title,
-      channelTitle: item.snippet.channelTitle, thumbnail: item.snippet.thumbnails?.high?.url,
+      videoId: item.id.videoId,
+      title: item.snippet.title,
+      channelTitle: item.snippet.channelTitle,
+      thumbnail: item.snippet.thumbnails?.high?.url,
       publishedAt: item.snippet.publishedAt,
     })));
   } catch (e) { res.status(500).json({ error: e.message }); }
