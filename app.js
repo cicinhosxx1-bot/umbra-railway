@@ -209,16 +209,92 @@ function renderHistory() {
 }
 
 // ── 5. Pesquisa / Trending ────────────────────────────────────────────────────
-let searchMode='search';
-function setSearchMode(mode,el){searchMode=mode;document.querySelectorAll('#panel-search .sort-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');document.getElementById('searchInputRow').style.display=mode==='search'?'flex':'none';document.getElementById('trendingBtn').style.display=mode==='trending'?'block':'none';document.getElementById('searchResult').innerHTML='';}
-async function doSearch(){const q=document.getElementById('searchInput').value.trim();if(!q)return;loading('searchResult');try{renderSearchResults(await api(`/api/search?q=${encodeURIComponent(q)}&max=12`));refreshStatus();}catch(e){errBox('searchResult',e.message);}}
-async function loadTrending(){loading('searchResult');try{renderSearchResults(await api('/api/trending?region=BR&max=12'),true);refreshStatus();}catch(e){errBox('searchResult',e.message);}}
-function renderSearchResults(items){
-  if(!items.length){document.getElementById('searchResult').innerHTML=`<div class="alert alert-info">Nenhum resultado.</div>`;return;}
-  document.getElementById('searchResult').innerHTML=`<div class="gap-col">${items.map(item=>`<a class="result-item" href="https://youtube.com/watch?v=${item.videoId}" target="_blank" rel="noopener">
-    ${item.thumbnail?`<img class="result-thumb" src="${item.thumbnail}" alt="">`:''}
-    <div style="flex:1;min-width:0"><div class="result-title">${item.title}</div><div class="result-ch">${item.channelTitle}</div>${item.views?`<div class="result-views">${fmtNum(item.views)} views</div>`:''}</div>
-  </a>`).join('')}</div>`;
+const SUBNICHOES = {
+  'Automotivo':    ['Auto','Carros','Motos','Caminhões','Pickups','Trucks','Manufatura','Reconstrução'],
+  'Culinária':     ['Receitas','Doces','Vegano','Churrasco','Confeitaria','Fitness Food'],
+  'Documentário':  ['Dark Hollywood','Desastres meteorológicos','História de famílias','História industrial','História oculta','Histórias de empresas icônicas','Histórias Emocionantes','Storytelling Científico','Storytelling Histórico','Curiosidades - Real estate'],
+  'Educação':      ['Ciência','Matemática','Idiomas','Vestibular','Concursos','Filosofia'],
+  'Entretenimento':['Reacts','Compilações','Vlogs','Lifestyle','Humor'],
+  'Esportes':      ['Futebol','NBA','UFC','F1','Natação','Esportes Radicais'],
+  'Finanças':      ['Investimentos','Crypto','Renda Passiva','Empreendedorismo','Bolsa de Valores'],
+  'Gaming':        ['Gameplay','Reviews de jogos','Esports','Tutoriais','Indie Games'],
+  'História':      ['Batalhas','História Antiga','Segunda Guerra','Civilizações','Nostalgia'],
+  'Humor':         ['Stand Up','Paródia','Sketches','Memes'],
+  'Manufatura':    ['Processamento','Construção','Fábricas','Indústria'],
+  'Música':        ['Clipes','Covers','Instrumentos','Making Of','Rankings'],
+  'Negócios':      ['Marketing','Vendas','Startups','Gestão','Liderança'],
+  'Nostalgia':     ['Anos 80','Anos 90','Retro Games','TV Antiga'],
+  'Psicologia':    ['Psicologia junguiana moderna','Comportamento humano','Autoconhecimento','Motivação','Relacionamentos'],
+  'Saúde':         ['Fitness','Dieta','Medicina','Saúde Mental','Yoga'],
+  'Tecnologia':    ['AI','Programação','Gadgets','Reviews Tech','Cybersecurity'],
+};
+
+function onNichoChange() {
+  const nicho = document.getElementById('filterNicho').value;
+  const sub   = document.getElementById('filterSubnicho');
+  sub.innerHTML = '<option value="">Todos</option>';
+  if (nicho && SUBNICHOES[nicho]) {
+    SUBNICHOES[nicho].forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s; sub.appendChild(opt);
+    });
+  }
+}
+
+let searchMode = 'search';
+function setSearchMode(mode, el) {
+  searchMode = mode;
+  document.querySelectorAll('#panel-search .sort-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  const isSearch = mode === 'search';
+  document.getElementById('searchInputRow').style.display = isSearch ? 'flex' : 'none';
+  document.getElementById('searchFilters').style.display  = isSearch ? 'flex' : 'none';
+  document.getElementById('trendingBtn').style.display    = isSearch ? 'none' : 'block';
+  document.getElementById('searchResult').innerHTML = '';
+}
+
+async function doSearch() {
+  const q        = document.getElementById('searchInput').value.trim();
+  const nicho    = document.getElementById('filterNicho').value;
+  const subnicho = document.getElementById('filterSubnicho').value;
+  const idioma   = document.getElementById('filterIdioma').value;
+  const periodo  = document.getElementById('filterPeriodo').value;
+  const videos   = document.getElementById('filterVideos').value;
+  const order    = document.getElementById('filterOrder').value;
+
+  if (!q && !nicho && !subnicho) { errBox('searchResult','Digite algo ou selecione um nicho.'); return; }
+  loading('searchResult');
+  try {
+    const params = new URLSearchParams({ max: 16, order });
+    if (q)        params.set('q', q);
+    if (nicho)    params.set('nicho', nicho);
+    if (subnicho) params.set('subnicho', subnicho);
+    if (idioma)   params.set('idioma', idioma);
+    if (periodo)  params.set('periodo', periodo);
+    if (videos)   params.set('videos', videos);
+    const results = await api(`/api/search?${params.toString()}`);
+    renderSearchResults(results);
+    refreshStatus();
+  } catch(e) { errBox('searchResult', e.message); }
+}
+
+async function loadTrending() {
+  loading('searchResult');
+  try { renderSearchResults(await api('/api/trending?region=BR&max=12'), true); refreshStatus(); }
+  catch(e) { errBox('searchResult', e.message); }
+}
+
+function renderSearchResults(items) {
+  if (!items.length) { document.getElementById('searchResult').innerHTML=`<div class="alert alert-info">Nenhum resultado para os filtros selecionados.</div>`; return; }
+  document.getElementById('searchResult').innerHTML = `<div class="gap-col">${items.map(item => `
+    <a class="result-item" href="https://youtube.com/watch?v=${item.videoId}" target="_blank" rel="noopener">
+      ${item.thumbnail ? `<img class="result-thumb" src="${item.thumbnail}" alt="">` : ''}
+      <div style="flex:1;min-width:0">
+        <div class="result-title">${item.title}</div>
+        <div class="result-ch">${item.channelTitle}</div>
+        <div class="result-views">${item.views ? fmtNum(item.views)+' views' : fmtDate(item.publishedAt)}</div>
+      </div>
+    </a>`).join('')}</div>`;
 }
 
 // ── 6. Download ───────────────────────────────────────────────────────────────
