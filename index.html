@@ -135,6 +135,14 @@ input[type=range]{width:100%;accent-color:var(--red);cursor:pointer}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-thumb{background:rgba(255,80,80,.3);border-radius:4px}
 @media(max-width:600px){.grid-2{grid-template-columns:1fr}.compare-grid{grid-template-columns:1fr 28px 1fr}.input-row{flex-direction:column}.input-row .btn{width:100%}.pools-grid{grid-template-columns:1fr 1fr}}
+/* ── Search Filters ── */
+.search-filters-bar{display:flex;flex-wrap:wrap;gap:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px}
+.filter-group{display:flex;align-items:center;gap:7px;min-width:0}
+.filter-label{font-size:10px;color:rgba(255,255,255,0.45);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;white-space:nowrap;flex-shrink:0}
+.filter-select{background:#0d0d18;border:1px solid rgba(255,255,255,0.12);border-radius:7px;color:#fff;font-size:12px;font-family:'Space Mono',monospace;padding:6px 28px 6px 10px;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.4)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;transition:border-color .2s;min-width:90px}
+.filter-select:focus{border-color:rgba(255,60,60,0.5)}
+.filter-select option{background:#0d0d18;color:#fff}
+@media(max-width:700px){.search-filters-bar{gap:8px}.filter-group{flex-direction:column;align-items:flex-start;gap:4px}.filter-select{min-width:140px;width:100%}}
 </style>
 </head>
 <body>
@@ -270,17 +278,97 @@ input[type=range]{width:100%;accent-color:var(--red);cursor:pointer}
   <!-- PESQUISA -->
   <div class="panel" id="panel-search">
     <div class="gap-col">
+
+      <!-- Mode toggle -->
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="sort-btn active" onclick="setSearchMode('search',this)">🔍 Pesquisar</button>
-        <button class="sort-btn" onclick="setSearchMode('trending',this)">🔥 Trending BR</button>
+        <button class="sort-btn active" onclick="setSearchMode('search',this)" id="sm-search">🔍 Pesquisar</button>
+        <button class="sort-btn" onclick="setSearchMode('trending',this)" id="sm-trending">🔥 Trending BR</button>
       </div>
+
+      <!-- Search input -->
       <div id="searchInputRow" class="input-row">
-        <input class="input" id="searchInput" placeholder="Pesquisar vídeos..." onkeydown="if(event.key==='Enter')doSearch()">
+        <input class="input" id="searchInput" placeholder="Buscar canal, nicho, subnicho..." onkeydown="if(event.key==='Enter')doSearch()">
         <button class="btn btn-red" onclick="doSearch()">Buscar</button>
       </div>
+
+      <!-- Filters row -->
+      <div id="searchFilters" class="search-filters-bar">
+        <div class="filter-group">
+          <label class="filter-label">Nicho:</label>
+          <select class="filter-select" id="filterNicho" onchange="onNichoChange()">
+            <option value="">Todos</option>
+            <option>Automotivo</option>
+            <option>Culinária</option>
+            <option>Documentário</option>
+            <option>Educação</option>
+            <option>Entretenimento</option>
+            <option>Esportes</option>
+            <option>Finanças</option>
+            <option>Gaming</option>
+            <option>História</option>
+            <option>Humor</option>
+            <option>Manufatura</option>
+            <option>Música</option>
+            <option>Negócios</option>
+            <option>Nostalgia</option>
+            <option>Psicologia</option>
+            <option>Saúde</option>
+            <option>Tecnologia</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Subnicho:</label>
+          <select class="filter-select" id="filterSubnicho">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Idioma:</label>
+          <select class="filter-select" id="filterIdioma">
+            <option value="">Todos</option>
+            <option value="pt">Português</option>
+            <option value="en">English</option>
+            <option value="es">Español</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Adicionado:</label>
+          <select class="filter-select" id="filterPeriodo">
+            <option value="">Todo período</option>
+            <option value="today">Hoje</option>
+            <option value="week">Últimos 7 dias</option>
+            <option value="2weeks">Últimos 14 dias</option>
+            <option value="month">Últimos 30 dias</option>
+            <option value="3months">Últimos 3 meses</option>
+            <option value="6months">Últimos 6 meses</option>
+            <option value="year">Último ano</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Vídeos:</label>
+          <select class="filter-select" id="filterVideos">
+            <option value="">Todos</option>
+            <option value="short">Curtos (até 4min)</option>
+            <option value="medium">Médios (4-20min)</option>
+            <option value="long">Longos (+20min)</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Ordenar:</label>
+          <select class="filter-select" id="filterOrder">
+            <option value="relevance">Mais Relevantes</option>
+            <option value="date">Mais Recentes</option>
+            <option value="viewCount">Mais Vistos</option>
+            <option value="rating">Melhor Avaliados</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Trending button -->
       <div id="trendingBtn" style="display:none">
         <button class="btn btn-red btn-full" onclick="loadTrending()">🔥 Carregar Trending Brasil</button>
       </div>
+
       <div id="searchResult"></div>
     </div>
   </div>
