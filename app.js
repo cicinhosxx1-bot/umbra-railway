@@ -116,7 +116,7 @@ function closeSidebar()  {
 
 // ── Dashboard Hero Video ──────────────────────────────────────────────────────
 // Vídeo fixo — troque o ID abaixo para mudar o vídeo do dashboard
-const HERO_VIDEO_ID = '';   // <- coloque aqui o ID do vídeo (ex: 'dQw4w9WgXcQ')
+const HERO_VIDEO_ID = 'I8d3gktU_gk';   // <- coloque aqui o ID do vídeo (ex: 'dQw4w9WgXcQ')
 
 function renderHeroVideo(id) {
   const el = document.getElementById('heroVideoInner');
@@ -131,24 +131,45 @@ function renderHeroVideo(id) {
 
 
 // ── Discover Feed ─────────────────────────────────────────────────────────────
-let feedRegion = 'BR', feedCategory = '';
-function setFeedFilter(region, catOrEl, el) {
+let feedRegion = 'BR', feedCategory = '', feedQty = 50, feedType = 'all';
+
+function setFeedFilter(region, cat, el) {
   feedRegion = region;
-  feedCategory = (typeof catOrEl === 'string' && catOrEl !== region) ? catOrEl : '';
-  const realEl = el || catOrEl;
-  if (realEl && realEl.classList) {
-    document.querySelectorAll('.feed-filter-btn').forEach(b=>b.classList.remove('active'));
-    realEl.classList.add('active');
-  }
+  feedCategory = cat || '';
+  document.querySelectorAll('.feed-filters .feed-filter-btn').forEach(b=>b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  loadFeed();
+}
+function setFeedQty(qty, el) {
+  feedQty = qty;
+  document.querySelectorAll('[id^="qty-"]').forEach(b=>b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  loadFeed();
+}
+function setFeedType(type, el) {
+  feedType = type;
+  document.querySelectorAll('[id^="type-"]').forEach(b=>b.classList.remove('active'));
+  if (el) el.classList.add('active');
   loadFeed();
 }
 async function loadFeed() {
   const grid = document.getElementById('feedGrid');
-  grid.innerHTML = `<div class="loading-row"><svg class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Carregando feed...</div>`;
+  grid.innerHTML = `<div class="loading-row"><svg class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Carregando ${feedQty} vídeos...</div>`;
   try {
-    const params = new URLSearchParams({ region: feedRegion, max: 20 });
-    if (feedCategory) params.set('category', feedCategory);
-    const items = await api(`/api/trending?${params.toString()}`);
+    // API max is 50 per call — batch if needed
+    const batchSize = 50;
+    const batches = Math.ceil(feedQty / batchSize);
+    let items = [];
+    for (let i = 0; i < batches; i++) {
+      const thisMax = Math.min(batchSize, feedQty - items.length);
+      const params = new URLSearchParams({ region: feedRegion, max: thisMax });
+      if (feedCategory) params.set('category', feedCategory);
+      if (feedType === 'long') params.set('videoDuration', 'long');
+      if (feedType === 'short') params.set('videoDuration', 'short');
+      const batch = await api(`/api/trending?${params.toString()}`);
+      items = items.concat(batch);
+      if (batch.length < thisMax) break; // API returned less than asked
+    }
     if (!items.length) { grid.innerHTML = `<div class="alert alert-info">Nenhum vídeo encontrado.</div>`; return; }
     grid.innerHTML = items.map(v => {
       const views = parseInt(v.views||0);
@@ -160,7 +181,7 @@ async function loadFeed() {
       viralScore = Math.min(viralScore+20, 99);
       const viralColor = viralScore>=70?'#ff3333':viralScore>=40?'#ffd93d':'#4ade80';
       return `<div class="video-card">
-        ${v.thumbnail?`<img class="video-card-thumb" src="${v.thumbnail}" alt="" loading="lazy">`:`<div class="video-card-thumb-placeholder">🎬</div>`}
+        ${v.thumbnail?`<img class="video-card-thumb" src="${v.thumbnail}" alt="" loading="lazy" onerror="this.style.display='none'">`:`<div class="video-card-thumb-placeholder">🎬</div>`}
         <div class="video-card-body">
           <div class="video-card-title">${v.title}</div>
           <div class="video-card-ch">${v.channelTitle}</div>
@@ -367,195 +388,84 @@ function renderHistory() {
 }
 
 // ── IA: Títulos ───────────────────────────────────────────────────────────────
-function generateTitles() {
+async function generateTitles() {
   const tema  = document.getElementById('iaTituloTema').value.trim();
   const nicho = document.getElementById('iaTituloNicho').value;
   const estilo= document.getElementById('iaTituloEstilo').value;
   if (!tema) { errBox('iaTitulosResult','Digite o tema do vídeo.'); return; }
-
-  const words = tema.split(' ').filter(w=>w.length>3);
-  const w0=words[0]||tema, w1=words[1]||'';
-  const year = new Date().getFullYear();
-
-  const templates = {
-    viral: [
-      `${tema.toUpperCase()} - Isso Vai Te Chocar 😱`,
-      `A Verdade Sobre ${tema} Que Ninguém Te Conta`,
-      `${tema}: O Segredo Que Mudou Minha Vida`,
-      `CUIDADO com ${tema} - Você Está Fazendo ERRADO`,
-      `Por Que ${tema} Está Destruindo ${nicho === 'geral' ? 'Todo Mundo' : `o ${nicho}`}`,
-      `${tema} em ${year}: O Que Realmente Funciona`,
-      `Fiz ${tema} Por 30 Dias e Isso Aconteceu...`,
-      `O Método de ${tema} Que Ninguém Ensina (FUNCIONA)`,
-      `${tema} - Do ZERO ao PROFISSIONAL em 7 Dias`,
-      `ACABOU! ${tema} Nunca Mais Vai Ser o Mesmo`,
-    ],
-    storytelling: [
-      `Como ${tema} Transformou Completamente Minha Vida`,
-      `A História Real Por Trás de ${tema}`,
-      `Eu Tentei ${tema} e Quase Desisti — Mas Então...`,
-      `De Completo Fracasso a Sucesso com ${tema}`,
-      `${tema}: A Jornada de 365 Dias Que Mudou Tudo`,
-      `Quando Descobri ${tema}, Minha Vida Nunca Mais Foi a Mesma`,
-      `A Verdade Dolorosa Sobre ${tema} (Minha História)`,
-      `Como Passei de Iniciante a Expert em ${tema}`,
-      `O Dia em Que ${tema} Mudou Tudo Para Mim`,
-      `${tema}: Uma História Que Você Precisa Ouvir`,
-    ],
-    tutorial: [
-      `Como Fazer ${tema} do ZERO (Passo a Passo Completo)`,
-      `Tutorial Completo de ${tema} Para Iniciantes ${year}`,
-      `${tema}: O Guia Definitivo que Você Precisava`,
-      `Aprenda ${tema} em 10 Minutos (Método Simplificado)`,
-      `${tema} Para Iniciantes — Sem Complicação`,
-      `Como Dominar ${tema} Mais Rápido do Que Imagina`,
-      `${tema} ${year}: Guia Completo e Atualizado`,
-      `O Tutorial de ${tema} Mais Direto ao Ponto`,
-      `Como Fazer ${tema} Corretamente (Erros Comuns)`,
-      `${tema} Explicado de Forma SIMPLES`,
-    ],
-    curiosidade: [
-      `${tema}: ${w0} Fatos Que Vão Te Impressionar`,
-      `Você Sabia Que ${tema} Pode ${w1}? 🤯`,
-      `A Ciência Por Trás de ${tema} É Mais Louca do Que Parece`,
-      `Por Que ${tema} Funciona? A Resposta Vai Te Surpreender`,
-      `${tema}: Tudo Que Você Sabe Está ERRADO`,
-      `O Mistério de ${tema} Finalmente Explicado`,
-      `Como ${tema} Realmente Funciona (A Verdade)`,
-      `${tema}: Descobertas Recentes Que Mudaram Tudo`,
-      `O Lado Obscuro de ${tema} Que a Mídia Esconde`,
-      `${tema} — Fatos Incríveis Que Ninguém Conta`,
-    ],
-    lista: [
-      `Top 10 Segredos de ${tema} Que Você Precisa Saber`,
-      `5 Erros Que Todo Mundo Comete em ${tema} (Evite!)`,
-      `7 Estratégias de ${tema} Que Realmente Funcionam`,
-      `10 Coisas Sobre ${tema} Que Vão Mudar Sua Perspectiva`,
-      `As 5 Melhores Formas de Dominar ${tema}`,
-      `8 Dicas de ${tema} Que os Experts Não Compartilham`,
-      `Top 10 ${tema} de ${year} — Ranqueado`,
-      `3 Métodos de ${tema} Que Ninguém Usa Mas Deveriam`,
-      `Os 7 Maiores Mitos Sobre ${tema} Desvendados`,
-      `10 Passos Para Dominar ${tema} em ${year}`,
-    ],
-    polemica: [
-      `${tema} Está DESTRUINDO Tudo — Precisamos Falar`,
-      `Por Que Odeio ${tema} (E Você Deveria Também)`,
-      `${tema}: A Grande Mentira Que Estão Te Vendendo`,
-      `Tudo Que Te Ensinaram Sobre ${tema} É MENTIRA`,
-      `${tema} Está MORTO — Saiu de Moda e Ninguém Avisou`,
-      `Fui CANCELADO Por Falar a Verdade Sobre ${tema}`,
-      `${tema}: Por Que Eu Mudei Completamente de Opinião`,
-      `A Polêmica de ${tema} Que Ninguém Quer Discutir`,
-      `Contro ${tema}: O Motivo Que Todo Mundo Ignora`,
-      `${tema} em ${year}: Por Que Está Indo Para o Lixo`,
-    ],
-  };
-
-  const titles = (templates[estilo] || templates.viral).map((t, i) => {
-    const len = t.length;
-    const hasNum = /\d+/.test(t);
-    const hasPower = /ERRADO|SEGREDO|NUNCA|FUNCIONA|ZERO|VERDADE|ACABOU|CUIDADO/i.test(t);
-    let score = 60;
-    if(len>=40&&len<=70)score+=15; if(hasNum)score+=10; if(hasPower)score+=15; score=Math.min(score,99);
-    return { text: t, score };
-  });
-
-  document.getElementById('iaTitulosResult').innerHTML = `<div class="ia-result">
-    <div class="ia-result-label">✨ ${titles.length} Títulos Gerados — Clique para copiar</div>
-    ${titles.map((t,i)=>`<div class="ia-title-item">
-      <span class="ia-title-num">${i+1}</span>
-      <span class="ia-title-text">${t.text}</span>
-      <span class="ia-title-score" style="color:${t.score>=80?'#4ade80':t.score>=60?'#ffd93d':'#ff6b6b'}">${t.score}</span>
-      <button class="ia-copy-btn" onclick="navigator.clipboard.writeText(\`${t.text.replace(/`/g,"'")}\`);this.textContent='✓';setTimeout(()=>this.textContent='Copiar',1500)">Copiar</button>
-    </div>`).join('')}
-  </div>`;
+  loading('iaTitulosResult');
+  try {
+    const { titles } = await api('/api/ia/titulos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tema, nicho, estilo }),
+    });
+    document.getElementById('iaTitulosResult').innerHTML = `<div class="ia-result">
+      <div class="ia-result-label">✨ ${titles.length} Títulos gerados pela Mistral AI — clique para copiar</div>
+      ${titles.map((t,i) => {
+        const sc = t.score>=80?'#4ade80':t.score>=60?'#ffd93d':'#ff6b6b';
+        const safe = t.text.replace(/'/g,"&#39;").replace(/"/g,'&quot;');
+        return `<div class="ia-title-item">
+          <span class="ia-title-num">${i+1}</span>
+          <span class="ia-title-text">${t.text}</span>
+          <span class="ia-title-score" style="color:${sc}">${t.score}</span>
+          <button class="ia-copy-btn" onclick="navigator.clipboard.writeText(this.dataset.t);this.textContent='✓';setTimeout(()=>this.textContent='Copiar',1500)" data-t="${safe}">Copiar</button>
+        </div>`;
+      }).join('')}
+    </div>`;
+    refreshStatus();
+  } catch(e) { errBox('iaTitulosResult', e.message); }
 }
 
 // ── IA: Descrição ─────────────────────────────────────────────────────────────
-function generateDescription() {
+async function generateDescription() {
   const titulo = document.getElementById('iaDescTitulo').value.trim();
   const pontos = document.getElementById('iaDescPontos').value.trim();
   const canal  = document.getElementById('iaDescCanal').value.trim();
   const nicho  = document.getElementById('iaDescNicho').value;
   if (!titulo) { errBox('iaDescResult','Título é obrigatório.'); return; }
-
-  const year = new Date().getFullYear();
-  const keywords = [titulo, nicho, pontos].join(' ').toLowerCase().split(/\s+/).filter(w=>w.length>4).slice(0,8);
-  const hashtags = [...new Set([nicho.replace(/\s+/g,''), 'YouTube', 'Brasil', ...keywords.map(k=>k.charAt(0).toUpperCase()+k.slice(1))])].slice(0,10).map(t=>`#${t}`).join(' ');
-
-  const desc = `📌 ${titulo}
-
-Neste vídeo${pontos ? `, vamos explorar: ${pontos}` : ` você vai aprender tudo sobre ${titulo}`}.
-
-${canal ? `━━━━━━━━━━━━━━━━━━━━━━━
-🔔 SE INSCREVA no canal ${canal} e ative o sininho para não perder nenhum vídeo!
-━━━━━━━━━━━━━━━━━━━━━━━` : ''}
-
-⏱️ TIMESTAMPS:
-00:00 - Introdução
-01:30 - ${pontos ? pontos.split(/[,\n]/)[0]?.trim() || 'Conceitos fundamentais' : 'Conceitos fundamentais'}
-05:00 - Desenvolvimento
-10:00 - Dicas práticas
-${pontos ? `14:00 - ${pontos.split(/[,\n]/)[1]?.trim() || 'Resultados'}` : '14:00 - Resultados'}
-18:00 - Conclusão
-
-━━━━━━━━━━━━━━━━━━━━━━━
-🔗 LINKS ÚTEIS:
-• Playlist do canal: [link]
-• Site oficial: [link]
-• Redes sociais: [link]
-━━━━━━━━━━━━━━━━━━━━━━━
-
-📧 Contato / Parcerias: [seu email]
-
-━━━━━━━━━━━━━━━━━━━━━━━
-🏷️ PALAVRAS-CHAVE:
-${titulo} | ${nicho} | ${keywords.join(' | ')} | ${year}
-
-${hashtags}`;
-
-  document.getElementById('iaDescResult').innerHTML = `<div class="ia-result">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div class="ia-result-label">✨ Descrição Gerada (${desc.length} chars)</div>
-      <button class="ia-copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('descTextarea').value);this.textContent='✓ Copiado!';setTimeout(()=>this.textContent='📋 Copiar tudo',1500)" style="font-size:11px;padding:6px 12px">📋 Copiar tudo</button>
-    </div>
-    <textarea id="descTextarea" class="input" style="min-height:300px;font-size:11px;line-height:1.7;background:rgba(0,0,0,.3)">${desc}</textarea>
-  </div>`;
+  loading('iaDescResult');
+  try {
+    const { description } = await api('/api/ia/descricao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ titulo, pontos, canal, nicho }),
+    });
+    document.getElementById('iaDescResult').innerHTML = `<div class="ia-result">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="ia-result-label">✨ Descrição SEO gerada pela Mistral AI (${description.length} chars)</div>
+        <button class="ia-copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('descTextarea').value);this.textContent='✓ Copiado!';setTimeout(()=>this.textContent='📋 Copiar tudo',1500)" style="font-size:11px;padding:6px 12px">📋 Copiar tudo</button>
+      </div>
+      <textarea id="descTextarea" class="input" style="min-height:300px;font-size:11px;line-height:1.7;background:rgba(0,0,0,.3)">${description.replace(/</g,'&lt;')}</textarea>
+    </div>`;
+    refreshStatus();
+  } catch(e) { errBox('iaDescResult', e.message); }
 }
 
 // ── IA: Roteiro ───────────────────────────────────────────────────────────────
-function generateRoteiro() {
+async function generateRoteiro() {
   const tema    = document.getElementById('iaRoteiroTema').value.trim();
   const formato = document.getElementById('iaRoteiroFormato').value;
   const estilo  = document.getElementById('iaRoteiroEstilo').value;
   if (!tema) { errBox('iaRoteiroResult','Digite o tema do vídeo.'); return; }
-
-  const durations = { curto:'5-8 min', medio:'10-15 min', longo:'20-30 min', short:'60 segundos' };
-  const isShort = formato === 'short';
-
-  const sections = isShort ? [
-    { title:'🎯 Hook (0-3s)', content:`"${tema.toUpperCase()}? Você PRECISA saber disso!" — mostre o resultado final imediatamente. Seja direto, sem introdução.` },
-    { title:'📖 Desenvolvimento (3-45s)', content:`Apresente 2-3 pontos principais de forma rápida e visual. Use texto na tela + voz + música de fundo. Ritmo acelerado.` },
-    { title:'🔥 CTA (45-60s)', content:`"Salva esse vídeo, vai precisar!" ou "Seguir para mais dicas de ${tema}". Termina com algo surpreendente ou uma pergunta.` },
-  ] : [
-    { title:'🎯 Hook (0-30s) — CRUCIAL', content:`Comece com a promessa mais forte do vídeo. Exemplo: "Nos próximos minutos você vai descobrir [resultado incrível sobre ${tema}]. Fica até o final porque tem um segredo que mudou tudo para mim."` },
-    { title:'👋 Introdução (30s-1min)', content:`Se apresente brevemente${estilo==='casual'?' de forma descontraída':''} e reforce o que o espectador vai ganhar assistindo. Crie expectativa com uma prévia do conteúdo.` },
-    { title:`📖 Desenvolvimento — Bloco 1 (1-${formato==='curto'?'3':'5'}min)`, content:`Primeiro ponto principal sobre ${tema}. Use exemplos práticos, dados ou histórias${estilo==='storytelling'?' pessoais':' relevantes'}. Termine com uma transição para o próximo bloco.` },
-    { title:`📖 Desenvolvimento — Bloco 2 (${formato==='curto'?'3-5':'5-10'}min)`, content:`Segundo ponto — aprofunde o tema. Mostre resultados, casos reais, comparações. Mantenha o ritmo${estilo==='dramatico'?' com música de fundo e pausas dramáticas':''}.` },
-    ...(formato !== 'curto' ? [{ title:'📖 Desenvolvimento — Bloco 3 (10-15min)', content:`Terceiro ponto — o mais valioso e inesperado. "O que a maioria não sabe sobre ${tema}..." ou "O erro fatal que todo mundo comete...". Gere emoção.` }] : []),
-    { title:'🔑 Conclusão e resumo', content:`Resuma os pontos principais em 3 bullets rápidos. Reforce a transformação que o espectador teve assistindo.` },
-    { title:'📢 CTA Final', content:`"Se esse vídeo te ajudou, deixa o like que ajuda demais o canal! Se inscreve e ativa o sino. Comenta aqui embaixo: qual parte te ajudou mais?" — Indicação de próximo vídeo.` },
-  ];
-
-  document.getElementById('iaRoteiroResult').innerHTML = `<div class="ia-result">
-    <div class="ia-result-label">✨ Roteiro: "${tema}" — ${durations[formato]} · Estilo ${estilo}</div>
-    ${sections.map(s=>`<div style="margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:16px">
-      <div style="font-size:13px;font-weight:700;color:var(--red2);margin-bottom:8px">${s.title}</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.7);line-height:1.75">${s.content}</div>
-    </div>`).join('')}
-    <div style="font-size:10px;color:var(--dim);font-family:var(--mono)">* Adapte cada bloco à sua linguagem e nicho. Este é um esqueleto base.</div>
-  </div>`;
+  loading('iaRoteiroResult');
+  try {
+    const { sections } = await api('/api/ia/roteiro', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tema, formato, estilo }),
+    });
+    const durations = { curto:'5-8 min', medio:'10-15 min', longo:'20-30 min', short:'60 segundos' };
+    document.getElementById('iaRoteiroResult').innerHTML = `<div class="ia-result">
+      <div class="ia-result-label">✨ Roteiro gerado pela Mistral AI — "${tema}" · ${durations[formato]||''} · ${estilo}</div>
+      ${sections.map(s=>`<div style="margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:var(--red2);margin-bottom:8px">${s.title}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.7);line-height:1.75;white-space:pre-wrap">${s.content}</div>
+      </div>`).join('')}
+      <div style="font-size:10px;color:var(--dim);font-family:var(--mono)">* Adapte à sua linguagem e estilo pessoal.</div>
+    </div>`;
+    refreshStatus();
+  } catch(e) { errBox('iaRoteiroResult', e.message); }
 }
 
 // ── SEO Tags ──────────────────────────────────────────────────────────────────
@@ -578,23 +488,40 @@ function analyzeSEO() {
 
 // ── Pesquisa ──────────────────────────────────────────────────────────────────
 const SUBNICHOES = {
-  'Automotivo':['Auto','Carros','Motos','Caminhões','Pickups','Trucks','Manufatura','Reconstrução'],
-  'Culinária':['Receitas','Doces','Vegano','Churrasco','Confeitaria','Fitness Food'],
-  'Documentário':['Dark Hollywood','Desastres meteorológicos','História de famílias','História industrial','História oculta','Histórias de empresas icônicas','Histórias Emocionantes','Storytelling Científico','Storytelling Histórico'],
-  'Educação':['Ciência','Matemática','Idiomas','Vestibular','Concursos','Filosofia'],
-  'Entretenimento':['Reacts','Compilações','Vlogs','Lifestyle'],
-  'Esportes':['Futebol','NBA','UFC','F1','Natação','Esportes Radicais'],
-  'Finanças':['Investimentos','Crypto','Renda Passiva','Empreendedorismo','Bolsa de Valores'],
-  'Gaming':['Gameplay','Reviews de jogos','Esports','Tutoriais','Indie Games'],
-  'História':['Batalhas','História Antiga','Segunda Guerra','Civilizações','Nostalgia'],
-  'Humor':['Stand Up','Paródia','Sketches','Memes'],
-  'Manufatura':['Processamento','Construção','Fábricas','Indústria'],
-  'Música':['Clipes','Covers','Instrumentos','Making Of','Rankings'],
-  'Negócios':['Marketing','Vendas','Startups','Gestão','Liderança'],
-  'Nostalgia':['Anos 80','Anos 90','Retro Games','TV Antiga'],
-  'Psicologia':['Psicologia junguiana moderna','Comportamento humano','Autoconhecimento','Motivação','Relacionamentos'],
-  'Saúde':['Fitness','Dieta','Medicina','Saúde Mental','Yoga'],
-  'Tecnologia':['AI','Programação','Gadgets','Reviews Tech','Cybersecurity'],
+  'Animais':['Cães','Gatos','Animais Selvagens','Aquários','Aves','Répteis','Fazenda'],
+  'Arte e Design':['Desenho','Pintura','Design Gráfico','Fotografia','Escultura','Tatuagem','Origami'],
+  'Automotivo':['Carros','Motos','Caminhões','Pickups','Trucks','Manufatura','Reconstrução','Modificações','Drift','Rally'],
+  'Aventura':['Escalada','Trilhas','Mergulho','Camping','Sobrevivência','Parapente','Motocross'],
+  'Cinema':['Análise de Filmes','Trailers','Bastidores','Críticas','Clássicos','Animação'],
+  'Comédia':['Stand Up','Paródia','Sketches','Pegadinhas','Memes'],
+  'Culinária':['Receitas','Doces','Vegano','Churrasco','Confeitaria','Fitness Food','Comida Japonesa','Confeitaria'],
+  'Documentário':['Dark Hollywood','Desastres','História industrial','História oculta','Histórias de empresas','Storytelling Científico','True Crime','Mistérios'],
+  'Educação':['Ciência','Matemática','Idiomas','Vestibular','Concursos','Filosofia','Astronomia'],
+  'Empreendedorismo':['Startups','Marketing Digital','Dropshipping','Freelancer','Negócios Online'],
+  'Entretenimento':['Reacts','Compilações','Vlogs','Lifestyle','Experimentos','Desafios'],
+  'Esportes':['Futebol','NBA','UFC','F1','Natação','Esportes Radicais','Basquete','Tênis'],
+  'Finanças':['Investimentos','Crypto','Renda Passiva','Bolsa de Valores','Imposto de Renda','Dívidas'],
+  'Fitness':['Musculação','Crossfit','Yoga','Corrida','Nutrição Esportiva','Calistenia'],
+  'Gaming':['Gameplay','Reviews de jogos','Esports','Tutoriais','Indie Games','RPG','FPS','Minecraft'],
+  'História':['Batalhas','História Antiga','Segunda Guerra','Civilizações','Nostalgia','Imperadores'],
+  'Humor':['Stand Up','Paródia','Sketches','Memes','Comédia Dramédia'],
+  'Idiomas':['Inglês','Espanhol','Japonês','Coreano','Francês','Mandarim'],
+  'Lifestyle':['Minimalismo','Rotina Matinal','Self Help','Desenvolvimento Pessoal','Produtividade'],
+  'Manufatura':['Processamento','Construção','Fábricas','Indústria','Ferramentaria'],
+  'Moda':['Looks','Tendências','Streetwear','Unboxing Roupas','Brechó'],
+  'Motivação':['Mentalidade','Disciplina','Autoconhecimento','Liderança','Foco'],
+  'Música':['Clipes','Covers','Instrumentos','Making Of','Rankings','Beat Making'],
+  'Negócios':['Marketing','Vendas','Gestão','Liderança','B2B','Franquias'],
+  'Nostalgia':['Anos 80','Anos 90','Retro Games','TV Antiga','Cultura Pop'],
+  'Notícias':['Política','Economia','Internacional','Tecnologia','Meio Ambiente'],
+  'Política':['Nacional','Internacional','Análise','Debates','Geopolítica'],
+  'Psicologia':['Comportamento humano','Autoconhecimento','Motivação','Relacionamentos','Ansiedade','Narcisismo'],
+  'Religião':['Espiritualidade','Bíblia','Filosofia Cristã','Budismo','Umbanda'],
+  'Saúde':['Medicina','Saúde Mental','Dieta','Yoga','Bem-estar'],
+  'Tecnologia':['AI','Programação','Gadgets','Reviews Tech','Cybersecurity','Linux','Robótica'],
+  'True Crime':['Casos Reais','Serial Killers','Crimes Famosos','Documentários Criminais'],
+  'TV e Séries':['Reviews','Análises','Bastidores','Rankings','Maratonas'],
+  'Viagem':['Mochilão','Destinos Nacionais','Europa','Ásia','América Latina','Dicas de Viagem'],
 };
 function onNichoChange() {
   const nicho=document.getElementById('filterNicho').value, sub=document.getElementById('filterSubnicho');
@@ -645,16 +572,17 @@ async function getDownload(){
   loading('downloadResult');
   try{
     const data=await api(`/api/download?id=${encodeURIComponent(extractVideoId(val))}`);
-    if(!data.formats?.length){errBox('downloadResult','Nenhum formato disponível.');return;}
+    if(!data.formats?.length){errBox('downloadResult','Nenhum formato disponível para este vídeo. Tente outro ID.');return;}
     const dlItem=(f,color)=>`<a class="dl-item" href="${f.url}" target="_blank" rel="noopener" onmouseover="this.style.borderColor='${color}55';this.style.background='${color}08'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)';this.style.background='rgba(255,255,255,0.04)'">
       <div><span class="dl-qual" style="color:${color}">${f.quality}</span><span class="dl-ext">.${f.ext}</span>${f.size?`<span class="dl-size">${f.size}</span>`:''}</div>
       <div class="dl-label" style="color:${color}">${ICO.dl}Download</div></a>`;
     const vs=data.formats.filter(f=>f.type==='video'), as_=data.formats.filter(f=>f.type==='audio');
     let html=`<div class="gap-col">`;
-    if(data.title)html+=`<div style="display:flex;gap:12px;align-items:center">${data.thumbnail?`<img src="${data.thumbnail}" style="width:80px;height:45px;object-fit:cover;border-radius:7px">`:''}
+    if(data.title)html+=`<div style="display:flex;gap:12px;align-items:center">${data.thumbnail?`<img src="${data.thumbnail}" style="width:80px;height:45px;object-fit:cover;border-radius:7px" onerror="this.style.display='none'">`:''}
       <div><div style="font-size:13px;font-weight:700">${data.title}</div>${data.duration?`<div style="font-size:11px;color:var(--muted)">⏱ ${data.duration}</div>`:''}</div></div>`;
     if(vs.length)html+=`<div><div class="field-label" style="margin-bottom:10px">🎬 Vídeo</div><div class="gap-col" style="gap:8px">${vs.map(f=>dlItem(f,'#4ade80')).join('')}</div></div>`;
     if(as_.length)html+=`<div><div class="field-label" style="margin-bottom:10px">🎵 Áudio</div><div class="gap-col" style="gap:8px">${as_.map(f=>dlItem(f,'#22d3ee')).join('')}</div></div>`;
+    if(!vs.length&&!as_.length)html+=`<div class="alert alert-err">⚠ A API retornou dados mas sem URLs de download. Tente outro vídeo.</div>`;
     html+=`</div>`;
     document.getElementById('downloadResult').innerHTML=html; refreshStatus();
   }catch(e){errBox('downloadResult',e.message);}
