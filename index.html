@@ -3,459 +3,773 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Umbra YouTube Analytics</title>
+<title>Umbra — YouTube Analytics</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
-:root{--bg:#0a0a0c;--surface:rgba(255,255,255,0.03);--border:rgba(255,255,255,0.07);--red:#ff4444;--text:#ffffff;--muted:rgba(255,255,255,0.4);--dim:rgba(255,255,255,0.2);--yellow:#ffd93d;--green:#6bcb77;--cyan:#4ecdc4;--purple:#c77dff;--mono:'Space Mono',monospace;--sans:'Syne',sans-serif}
+:root{
+  --bg:#08080f;--sidebar-bg:#0c0c15;--surface:rgba(255,255,255,0.04);--surface2:rgba(255,255,255,0.07);
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
+  --red:#ff3333;--red2:#ff6b6b;--redglow:rgba(255,51,51,0.25);
+  --text:#f0f0ff;--muted:rgba(240,240,255,0.45);--dim:rgba(240,240,255,0.22);
+  --green:#4ade80;--yellow:#ffd93d;--cyan:#22d3ee;--purple:#a78bfa;--orange:#fb923c;
+  --mono:'Space Mono',monospace;--sans:'Syne',sans-serif;
+  --sidebar-w:240px;--topbar-h:56px;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;padding:24px 16px 60px;background-image:radial-gradient(ellipse 60% 40% at 80% 10%,rgba(255,40,40,0.06) 0%,transparent 60%),radial-gradient(ellipse 40% 50% at 10% 80%,rgba(255,80,80,0.04) 0%,transparent 60%)}
-@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex;}
+
+/* ── Sidebar ── */
+.sidebar{
+  width:var(--sidebar-w);min-width:var(--sidebar-w);height:100vh;
+  background:var(--sidebar-bg);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;z-index:200;
+  transition:transform .3s cubic-bezier(.16,1,.3,1);
+}
+.sidebar-logo{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-logo-icon{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#ff2020,#990000);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(255,0,0,0.35);flex-shrink:0}
+.sidebar-logo-title{font-size:17px;font-weight:800;letter-spacing:-.5px;background:linear-gradient(135deg,#fff 40%,rgba(255,100,100,.8));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sidebar-logo-sub{font-size:8px;color:rgba(255,100,100,.6);letter-spacing:2px;text-transform:uppercase;font-family:var(--mono)}
+
+.sidebar-nav{flex:1;overflow-y:auto;padding:10px 0}
+.sidebar-nav::-webkit-scrollbar{width:3px}
+.sidebar-nav::-webkit-scrollbar-thumb{background:rgba(255,51,51,.2);border-radius:3px}
+
+.nav-group{margin-bottom:4px}
+.nav-group-label{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:2px;font-family:var(--mono);padding:10px 18px 5px;display:flex;align-items:center;gap:6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 18px;cursor:pointer;transition:all .15s;color:var(--muted);font-size:12px;font-weight:600;font-family:var(--mono);position:relative;border-radius:0;user-select:none}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,.04)}
+.nav-item.active{color:#fff;background:rgba(255,51,51,.1)}
+.nav-item.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:20px;background:var(--red);border-radius:0 3px 3px 0}
+.nav-item-icon{width:16px;height:16px;flex-shrink:0;opacity:.7}
+.nav-item.active .nav-item-icon{opacity:1}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:8px;padding:2px 6px;border-radius:10px;font-family:var(--mono);font-weight:700}
+.nav-badge-new{background:var(--green);color:#000}
+
+.sidebar-status{padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite;flex-shrink:0}
+.status-text{font-size:9px;font-family:var(--mono);color:var(--muted)}
+.status-text span{color:var(--green);font-weight:700}
+
+/* ── Main ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* ── Topbar ── */
+.topbar{height:var(--topbar-h);min-height:var(--topbar-h);background:rgba(12,12,21,.9);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:12px;backdrop-filter:blur(12px);z-index:100;flex-shrink:0}
+.topbar-menu-btn{display:none;background:none;border:none;color:var(--muted);cursor:pointer;padding:6px;border-radius:6px}
+.topbar-menu-btn:hover{background:var(--surface);color:var(--text)}
+.topbar-title{font-size:15px;font-weight:800;color:var(--text)}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.topbar-pool-pills{display:flex;gap:6px}
+.pool-pill{font-size:9px;font-family:var(--mono);padding:3px 8px;border-radius:20px;border:1px solid;display:flex;align-items:center;gap:4px;cursor:default}
+.topbar-version{font-size:9px;font-family:var(--mono);color:var(--dim);background:var(--surface);border:1px solid var(--border);padding:3px 10px;border-radius:20px}
+
+/* ── Content ── */
+.content{flex:1;overflow-y:auto;padding:28px 28px 60px}
+.content::-webkit-scrollbar{width:5px}
+.content::-webkit-scrollbar-thumb{background:rgba(255,51,51,.2);border-radius:5px}
+
+/* ── Panels ── */
+.panel{display:none;animation:fadeUp .3s ease}
+.panel.active{display:block}
+
+/* ── Common UI ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spin{to{transform:rotate(360deg)}}
-@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
-.app{max-width:820px;margin:0 auto;animation:fadeUp .5s ease}
-.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--border)}
-.logo{display:flex;align-items:center;gap:14px}
-.logo-icon{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#ff2222,#880000);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 28px rgba(255,0,0,0.35);flex-shrink:0}
-.logo-title{font-size:22px;font-weight:800;letter-spacing:-.5px}
-.logo-sub{font-size:9px;color:rgba(255,100,100,.8);letter-spacing:2.5px;text-transform:uppercase;font-family:var(--mono);margin-top:2px}
-.badge{font-size:9px;color:var(--dim);font-family:var(--mono);background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:20px}
-.pool-bar{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:20px}
-.pool-bar-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.pulse-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite;flex-shrink:0}
-.pool-bar-label{font-size:10px;font-family:var(--mono);color:var(--muted)}
-.pool-bar-label span{color:var(--green)}
-.pools-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
-.pool-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:8px 10px}
-.pool-card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
-.pool-card-name{font-size:9px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1px}
-.pool-card-keys{font-size:9px;font-family:var(--mono);color:var(--dim)}
-.pool-progress{display:flex;align-items:center;gap:6px;margin-bottom:5px}
-.pool-track{flex:1;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden}
-.pool-fill{height:100%;border-radius:2px;transition:width .4s}
-.pool-usage{font-size:9px;font-family:var(--mono);color:var(--dim)}
-.pool-dots{display:flex;gap:2px}
-.kdot{width:5px;height:5px;border-radius:50%}
-.tab-groups{display:flex;flex-direction:column;gap:10px;margin-bottom:22px}
-.tab-group-label{font-size:9px;text-transform:uppercase;letter-spacing:2px;font-family:var(--mono);margin-bottom:6px}
-.g-analise{color:rgba(255,100,100,.6)}.g-tools{color:rgba(255,211,61,.6)}.g-extra{color:rgba(107,203,119,.6)}
-.tab-row{display:flex;flex-wrap:wrap;gap:6px}
-.tab-btn{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:12px;font-weight:700;font-family:var(--mono);cursor:pointer;transition:all .2s;white-space:nowrap}
-.tab-btn:hover{color:var(--text);border-color:rgba(255,255,255,.15)}
-.active-analise{border-color:rgba(255,80,80,.5)!important;background:rgba(255,80,80,.1)!important;color:#fff!important}
-.active-tools{border-color:rgba(255,211,61,.5)!important;background:rgba(255,211,61,.08)!important;color:#fff!important}
-.active-extra{border-color:rgba(107,203,119,.5)!important;background:rgba(107,203,119,.08)!important;color:#fff!important}
-.divider{height:1px;background:linear-gradient(90deg,rgba(255,80,80,.35),rgba(255,255,255,.04),transparent);margin-bottom:22px}
-.panel{display:none;animation:fadeUp .3s ease}.panel.active{display:block}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes countUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.page-header{margin-bottom:24px}
+.page-title{font-size:22px;font-weight:800;letter-spacing:-.5px}
+.page-sub{font-size:12px;color:var(--muted);margin-top:4px}
 .gap-col{display:flex;flex-direction:column;gap:16px}
-.field-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;font-family:var(--mono);margin-bottom:7px}
-.input{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:13px 16px;color:var(--text);font-size:13px;font-family:var(--mono);outline:none;transition:border-color .2s}
-.input:focus{border-color:rgba(255,80,80,.5)}
-textarea.input{resize:vertical;min-height:80px;line-height:1.6}
-.input-row{display:flex;gap:10px;align-items:flex-end}
-.input-row .input{flex:1}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:none;border-radius:9px;padding:12px 22px;color:#fff;font-size:13px;font-weight:700;font-family:var(--mono);cursor:pointer;transition:all .2s;white-space:nowrap}
-.btn-red{background:linear-gradient(135deg,#ff4444,#cc0000);box-shadow:0 4px 20px rgba(255,0,0,.2)}
-.btn-red:hover{box-shadow:0 6px 28px rgba(255,0,0,.35);transform:translateY(-1px)}
-.btn-green{background:linear-gradient(135deg,#4caf50,#2e7d32)}
+.gap-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.grid-auto{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s}
+.card:hover{border-color:var(--border2)}
+.card-accent{position:absolute;top:0;right:0;width:60px;height:60px;opacity:.05;border-radius:0 14px 0 100%}
+.stat-icon{margin-bottom:6px;opacity:.85}
+.stat-val{font-size:24px;font-weight:800;font-family:var(--mono);letter-spacing:-1.5px;margin:5px 0;animation:countUp .4s ease}
+.stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.8px}
+
+.input{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 16px;color:var(--text);font-size:13px;font-family:var(--mono);outline:none;transition:all .2s}
+.input:focus{border-color:rgba(255,51,51,.5);background:rgba(255,255,255,.06);box-shadow:0 0 0 3px rgba(255,51,51,.07)}
+textarea.input{resize:vertical;min-height:80px;line-height:1.7}
+.input-row{display:flex;gap:10px;align-items:flex-end}.input-row .input{flex:1}
+.field-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.8px;font-family:var(--mono);margin-bottom:7px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:none;border-radius:10px;padding:11px 22px;color:#fff;font-size:13px;font-weight:700;font-family:var(--mono);cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-red{background:linear-gradient(135deg,#ff3333,#cc0000);box-shadow:0 4px 18px rgba(255,0,0,.22)}
+.btn-red:hover{transform:translateY(-1px);box-shadow:0 6px 26px rgba(255,0,0,.38)}
 .btn-ghost{background:rgba(255,255,255,.06);border:1px solid var(--border)}
+.btn-ghost:hover{background:rgba(255,255,255,.1)}
 .btn-full{width:100%}
-.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden}
-.card-glow{position:absolute;top:0;right:0;width:55px;height:55px;opacity:.05;border-radius:0 12px 0 100%}
-.stat-val{font-size:22px;font-weight:700;font-family:var(--mono);letter-spacing:-1px;margin:6px 0}
-.stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
-.alert{border-radius:8px;padding:11px 15px;font-size:12px;display:flex;align-items:flex-start;gap:8px}
-.alert-err{background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.22);color:#ff8080}
-.alert-ok{background:rgba(107,203,119,.08);border:1px solid rgba(107,203,119,.25);color:#6bcb77}
-.alert-info{background:rgba(78,205,196,.06);border:1px solid rgba(78,205,196,.2);color:#4ecdc4}
-.ch-header{display:flex;align-items:flex-start;gap:14px}
-.ch-avatar{width:68px;height:68px;border-radius:50%;border:2px solid rgba(255,80,80,.35);object-fit:cover;flex-shrink:0}
-.ch-name{font-size:19px;font-weight:800;line-height:1.2}
-.ch-meta{font-size:11px;color:var(--muted);margin-top:5px}
-.desc-box{background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:10px;padding:14px 16px;max-height:120px;overflow:auto}
-.desc-box p{font-size:12px;color:rgba(255,255,255,.55);line-height:1.75}
-.thumb{width:100%;border-radius:12px;max-height:230px;object-fit:cover;display:block}
-.result-item{display:flex;gap:12px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px;cursor:pointer;text-decoration:none;transition:border-color .2s}
-.result-item:hover{border-color:rgba(255,80,80,.3)}
-.result-thumb{width:118px;height:67px;object-fit:cover;border-radius:6px;flex-shrink:0}
-.result-title{font-size:12px;font-weight:700;color:#fff;line-height:1.45;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.result-ch{font-size:10px;color:var(--muted);margin-top:4px}
-.result-views{font-size:10px;color:var(--dim);font-family:var(--mono);margin-top:3px}
-.compare-grid{display:grid;grid-template-columns:1fr 36px 1fr;gap:10px;align-items:center;margin-bottom:16px}
-.vs-label{text-align:center;font-size:10px;color:var(--dim);font-family:var(--mono);font-weight:700}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important}
+
+.alert{border-radius:10px;padding:12px 16px;font-size:12px;display:flex;align-items:flex-start;gap:9px;line-height:1.6}
+.alert-err{background:rgba(255,51,51,.08);border:1px solid rgba(255,51,51,.25);color:#ff8080}
+.alert-ok{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.25);color:#4ade80}
+.alert-info{background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.2);color:var(--cyan)}
+
+.spinner{display:inline-block;animation:spin 1s linear infinite}
+.loading-row{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;font-family:var(--mono);padding:24px 0}
+
+.ch-header{display:flex;align-items:flex-start;gap:16px}
+.ch-avatar{width:68px;height:68px;border-radius:50%;border:2px solid rgba(255,51,51,.4);object-fit:cover;flex-shrink:0;box-shadow:0 4px 20px rgba(255,0,0,.18)}
+.ch-name{font-size:20px;font-weight:800;line-height:1.2;letter-spacing:-.3px}
+.ch-meta{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.6}
+.desc-box{background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:11px;padding:14px 16px;max-height:130px;overflow:auto}
+.desc-box p{font-size:12px;color:rgba(255,255,255,.5);line-height:1.8}
+
+.thumb{width:100%;border-radius:14px;max-height:230px;object-fit:cover;display:block}
+
+.compare-grid{display:grid;grid-template-columns:1fr 36px 1fr;gap:12px;align-items:center;margin-bottom:16px}
+.vs-label{text-align:center;font-size:11px;color:var(--dim);font-family:var(--mono);font-weight:700}
 .compare-ch{display:flex;align-items:center;gap:10px}
 .compare-ch.right{flex-direction:row-reverse;text-align:right}
-.compare-bar-row{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:13px 16px;margin-bottom:8px}
-.bar-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.bar-val{font-size:14px;font-weight:700;font-family:var(--mono)}
-.bar-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
-.bar-track{height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;display:flex}
-.bar-a{background:linear-gradient(90deg,rgba(255,80,80,.9),rgba(255,80,80,.5));border-radius:3px 0 0 3px;transition:width .9s cubic-bezier(.16,1,.3,1)}
-.bar-b{flex:1;background:linear-gradient(90deg,rgba(78,205,196,.5),rgba(78,205,196,.9));border-radius:0 3px 3px 0}
+.compare-bar-row{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:13px 16px;margin-bottom:8px}
+.bar-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
+.bar-val{font-size:14px;font-weight:800;font-family:var(--mono)}
+.bar-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
+.bar-track{height:6px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden;display:flex}
+.bar-a{background:linear-gradient(90deg,rgba(255,51,51,.9),rgba(255,100,100,.5));border-radius:3px 0 0 3px;transition:width .9s cubic-bezier(.16,1,.3,1)}
+.bar-b{flex:1;background:linear-gradient(90deg,rgba(34,211,238,.5),rgba(34,211,238,.9));border-radius:0 3px 3px 0}
+
 .sort-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-.sort-btn{padding:6px 12px;border-radius:6px;font-size:11px;font-family:var(--mono);cursor:pointer;border:1px solid rgba(255,255,255,.08);background:transparent;color:var(--muted);transition:all .2s}
-.sort-btn.active{border-color:rgba(255,80,80,.4);background:rgba(255,80,80,.1);color:#ff6b6b}
-.vid-list{display:flex;flex-direction:column;gap:8px;max-height:500px;overflow-y:auto;padding-right:4px}
-.vid-item{display:flex;align-items:center;gap:11px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px;cursor:pointer;text-decoration:none;transition:border-color .2s}
-.vid-item:hover{border-color:rgba(255,80,80,.3)}
-.vid-thumb{width:90px;height:51px;object-fit:cover;border-radius:6px;flex-shrink:0}
+.sort-btn{padding:6px 12px;border-radius:7px;font-size:11px;font-family:var(--mono);cursor:pointer;border:1px solid rgba(255,255,255,.08);background:transparent;color:var(--muted);transition:all .2s}
+.sort-btn.active{border-color:rgba(255,51,51,.45);background:rgba(255,51,51,.1);color:var(--red2)}
+
+.vid-list{display:flex;flex-direction:column;gap:8px;max-height:520px;overflow-y:auto;padding-right:4px}
+.vid-item{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:11px;text-decoration:none;transition:border-color .2s}
+.vid-item:hover{border-color:rgba(255,51,51,.3)}
+.vid-thumb{width:88px;height:50px;object-fit:cover;border-radius:7px;flex-shrink:0}
 .vid-title{font-size:12px;font-weight:700;color:#fff;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4}
 .vid-stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:5px}
 .vid-stat{font-size:10px;font-family:var(--mono)}
 .vid-perf{height:2px;background:rgba(255,255,255,.05);border-radius:1px;margin-top:8px;overflow:hidden}
-.vid-perf-fill{height:100%;background:linear-gradient(90deg,#ff4444,#ff8080);border-radius:1px;transition:width .7s ease}
-.vid-date{font-size:9px;color:var(--dim);flex-shrink:0;text-align:right;margin-left:auto;align-self:flex-start;padding-top:2px}
-.niche-grid{display:flex;flex-wrap:wrap;gap:6px}
-.niche-btn,.country-btn{padding:7px 13px;border-radius:6px;font-size:11px;font-family:var(--mono);cursor:pointer;border:1px solid rgba(255,255,255,.08);background:transparent;color:var(--muted);transition:all .2s}
-.niche-btn.active{border-color:rgba(255,80,80,.4);background:rgba(255,80,80,.1);color:#ff8080}
-.country-btn.active{border-color:rgba(255,211,61,.4);background:rgba(255,211,61,.08);color:#ffd93d}
-.earnings-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px}
-.earnings-note{font-size:9px;color:var(--dim);line-height:1.7;font-family:var(--mono);margin-top:14px}
-input[type=range]{width:100%;accent-color:var(--red);cursor:pointer}
-.tag-chip{padding:4px 11px;background:rgba(78,205,196,.1);border:1px solid rgba(78,205,196,.22);border-radius:20px;font-size:11px;color:var(--cyan);font-family:var(--mono);display:inline-block;margin:3px}
-.seo-score-ring{width:70px;height:70px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;border:3px solid;flex-shrink:0}
-.tip-item{display:flex;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:rgba(255,255,255,.65);line-height:1.65}
-.fav-item{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
-.fav-name{font-size:13px;font-weight:700;color:#fff}
-.fav-id{font-size:10px;color:var(--dim);font-family:var(--mono);margin-top:2px}
-.fav-link{text-decoration:none;color:var(--muted);background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-size:12px;transition:all .2s;flex-shrink:0}
-.fav-link:hover{color:#fff}
-.fav-del{background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.15);border-radius:6px;padding:5px 8px;cursor:pointer;color:rgba(255,80,80,.6);transition:all .2s;flex-shrink:0}
-.fav-del:hover{background:rgba(255,80,80,.18);color:#ff6b6b}
-.dl-item{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;text-decoration:none;transition:all .2s}
+.vid-perf-fill{height:100%;background:linear-gradient(90deg,var(--red),var(--red2));border-radius:1px;transition:width .8s ease}
+.vid-date{font-size:9px;color:var(--dim);flex-shrink:0;text-align:right;margin-left:auto;align-self:flex-start}
+
+.result-item{display:flex;gap:12px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:12px;text-decoration:none;transition:border-color .2s}
+.result-item:hover{border-color:rgba(255,51,51,.3)}
+.result-thumb{width:118px;height:67px;object-fit:cover;border-radius:7px;flex-shrink:0}
+.result-title{font-size:12px;font-weight:700;color:#fff;line-height:1.45;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.result-ch{font-size:10px;color:var(--muted);margin-top:4px}
+.result-meta{font-size:10px;color:var(--dim);font-family:var(--mono);margin-top:3px}
+
+.dl-item{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 14px;text-decoration:none;transition:all .2s}
 .dl-qual{font-size:13px;font-weight:700;font-family:var(--mono)}
-.dl-ext{font-size:10px;color:var(--muted);text-transform:uppercase;margin-left:8px}
-.dl-size{font-size:10px;color:var(--dim);margin-left:8px}
-.dl-btn-label{font-size:12px;display:flex;align-items:center;gap:5px}
-.spinner{display:inline-block;animation:spin 1s linear infinite}
-.loading-row{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;font-family:var(--mono);padding:20px 0}
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-thumb{background:rgba(255,80,80,.3);border-radius:4px}
-@media(max-width:600px){.grid-2{grid-template-columns:1fr}.compare-grid{grid-template-columns:1fr 28px 1fr}.input-row{flex-direction:column}.input-row .btn{width:100%}.pools-grid{grid-template-columns:1fr 1fr}}
-/* ── Search Filters ── */
+.dl-ext{font-size:10px;color:var(--muted);text-transform:uppercase;margin-left:7px}
+.dl-size{font-size:10px;color:var(--dim);margin-left:7px}
+.dl-label{font-size:12px;display:flex;align-items:center;gap:5px}
+
+.niche-btn,.country-btn{padding:7px 12px;border-radius:7px;font-size:11px;font-family:var(--mono);cursor:pointer;border:1px solid rgba(255,255,255,.08);background:transparent;color:var(--muted);transition:all .2s}
+.niche-btn.active{border-color:rgba(255,51,51,.4);background:rgba(255,51,51,.1);color:var(--red2)}
+.country-btn.active{border-color:rgba(255,211,61,.4);background:rgba(255,211,61,.08);color:var(--yellow)}
+input[type=range]{width:100%;accent-color:var(--red);cursor:pointer}
+
+.tag-chip{padding:4px 10px;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.2);border-radius:20px;font-size:10px;color:var(--cyan);font-family:var(--mono);display:inline-block;margin:2px}
+.seo-score-ring{width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;border:3px solid;flex-shrink:0}
+.tip-item{display:flex;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 14px;font-size:12px;color:rgba(255,255,255,.6);line-height:1.65}
+
+.deep-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .2s}
+.deep-card:hover{border-color:var(--border2)}
+.deep-icon{font-size:18px;margin-bottom:6px}
+.deep-val{font-size:18px;font-weight:800;font-family:var(--mono);letter-spacing:-1px}
+.deep-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-top:4px}
+.trend-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-family:var(--mono);font-weight:700}
+.trend-up{background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);color:#4ade80}
+.trend-down{background:rgba(255,51,51,.1);border:1px solid rgba(255,51,51,.25);color:#ff6b6b}
+.trend-stable{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted)}
+.highlight-vid{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:12px;text-decoration:none;transition:border-color .2s}
+.highlight-vid:hover{border-color:rgba(255,51,51,.3)}
+.highlight-vid img{width:88px;height:50px;object-fit:cover;border-radius:7px;flex-shrink:0}
+.hv-title{font-size:12px;font-weight:700;color:#fff;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+
+.re-hero{border-radius:14px;overflow:hidden;position:relative}
+.re-hero img{width:100%;max-height:220px;object-fit:cover;display:block}
+.re-hero-overlay{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(8,8,15,.95));padding:20px 16px 14px}
+.re-hero-title{font-size:15px;font-weight:800;line-height:1.4;color:#fff}
+.re-hero-ch{font-size:11px;color:var(--muted);margin-top:4px}
+.viral-ring{display:flex;align-items:center;justify-content:center;flex-direction:column;width:78px;height:78px;border-radius:50%;border:3px solid;flex-shrink:0}
+.score-row{display:flex;align-items:center;gap:16px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 20px}
+.title-checks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.check-item{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:11px}
+.re-stats{display:flex;gap:8px;flex-wrap:wrap}
+.re-stat{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 14px;flex:1;min-width:90px;text-align:center}
+.re-stat-val{font-size:16px;font-weight:800;font-family:var(--mono)}
+.re-stat-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-top:3px}
+.dur-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);border-radius:10px;padding:10px 16px;font-size:12px;color:var(--purple)}
+
+/* ── Dashboard ── */
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:24px}
+.dash-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;position:relative;overflow:hidden;cursor:pointer;transition:all .2s}
+.dash-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+.dash-card-icon{font-size:22px;margin-bottom:10px}
+.dash-card-val{font-size:28px;font-weight:800;font-family:var(--mono);letter-spacing:-2px}
+.dash-card-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.8px;margin-top:5px}
+.dash-card-sub{font-size:10px;font-family:var(--mono);margin-top:6px}
+.dash-accent{position:absolute;top:0;right:0;width:70px;height:70px;opacity:.05;border-radius:0 14px 0 100%}
+
+/* ── Feed grid ── */
+.feed-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;align-items:center}
+.feed-filter-btn{padding:7px 14px;border-radius:20px;font-size:11px;font-family:var(--mono);cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .2s}
+.feed-filter-btn.active{border-color:rgba(255,51,51,.5);background:rgba(255,51,51,.1);color:#fff}
+.video-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.video-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;transition:all .2s}
+.video-card:hover{border-color:rgba(255,51,51,.35);transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,.4)}
+.video-card-thumb{width:100%;aspect-ratio:16/9;object-fit:cover;display:block}
+.video-card-thumb-placeholder{width:100%;aspect-ratio:16/9;background:linear-gradient(135deg,rgba(255,51,51,.08),rgba(255,255,255,.03));display:flex;align-items:center;justify-content:center;font-size:28px}
+.video-card-body{padding:12px}
+.video-card-title{font-size:12px;font-weight:700;color:#fff;line-height:1.45;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-bottom:8px}
+.video-card-ch{font-size:10px;color:var(--muted)}
+.video-card-stats{display:flex;gap:10px;margin-top:6px}
+.video-card-stat{font-size:10px;font-family:var(--mono);color:var(--dim)}
+.video-card-scores{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap}
+.score-pill{padding:3px 8px;border-radius:20px;font-size:9px;font-family:var(--mono);font-weight:700;display:flex;align-items:center;gap:3px}
+.score-viral{background:rgba(255,51,51,.15);border:1px solid rgba(255,51,51,.3);color:var(--red2)}
+.score-seo{background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.25);color:var(--cyan)}
+.video-card-actions{display:flex;gap:6px;margin-top:10px}
+.vc-btn{flex:1;padding:6px 8px;border-radius:7px;font-size:10px;font-family:var(--mono);font-weight:700;cursor:pointer;border:none;transition:all .2s;text-align:center}
+.vc-btn-primary{background:rgba(255,51,51,.15);color:var(--red2);border:1px solid rgba(255,51,51,.25)}
+.vc-btn-primary:hover{background:rgba(255,51,51,.25)}
+.vc-btn-ghost{background:rgba(255,255,255,.05);color:var(--muted);border:1px solid var(--border)}
+.vc-btn-ghost:hover{background:rgba(255,255,255,.1);color:#fff}
+
+/* ── Video hero (intro) ── */
+.video-hero-container{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:20px}
+.video-hero-inner{position:relative;width:100%;padding-top:56.25%}
+.video-hero-inner iframe,.video-hero-inner video{position:absolute;top:0;left:0;width:100%;height:100%;border:none}
+.video-hero-placeholder{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--muted);font-family:var(--mono);font-size:12px}
+.video-url-input{display:flex;gap:10px;padding:14px 16px;border-top:1px solid var(--border);background:rgba(255,255,255,.02)}
+
+/* ── IA Tools ── */
+.ia-result{background:rgba(255,51,51,.04);border:1px solid rgba(255,51,51,.15);border-radius:12px;padding:16px}
+.ia-result-label{font-size:9px;color:rgba(255,100,100,.7);text-transform:uppercase;letter-spacing:2px;font-family:var(--mono);margin-bottom:10px}
+.ia-title-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.ia-title-item:last-child{border-bottom:none}
+.ia-title-num{font-size:11px;font-family:var(--mono);color:var(--red2);font-weight:700;flex-shrink:0;min-width:20px}
+.ia-title-text{font-size:13px;color:var(--text);line-height:1.5;flex:1}
+.ia-title-score{font-size:10px;font-family:var(--mono);color:var(--muted);flex-shrink:0}
+.ia-copy-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:var(--mono);transition:all .2s;margin-left:6px}
+.ia-copy-btn:hover{background:rgba(255,255,255,.06);color:#fff}
+
+/* ── SEO ── */
 .search-filters-bar{display:flex;flex-wrap:wrap;gap:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px}
 .filter-group{display:flex;align-items:center;gap:7px;min-width:0}
-.filter-label{font-size:10px;color:rgba(255,255,255,0.45);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;white-space:nowrap;flex-shrink:0}
-.filter-select{background:#0d0d18;border:1px solid rgba(255,255,255,0.12);border-radius:7px;color:#fff;font-size:12px;font-family:'Space Mono',monospace;padding:6px 28px 6px 10px;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.4)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;transition:border-color .2s;min-width:90px}
-.filter-select:focus{border-color:rgba(255,60,60,0.5)}
+.filter-label{font-size:10px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;white-space:nowrap;flex-shrink:0}
+.filter-select{background:#0d0d18;border:1px solid rgba(255,255,255,.12);border-radius:7px;color:#fff;font-size:12px;font-family:var(--mono);padding:6px 28px 6px 10px;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.4)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;transition:border-color .2s;min-width:90px}
+.filter-select:focus{border-color:rgba(255,51,51,.5)}
 .filter-select option{background:#0d0d18;color:#fff}
-@media(max-width:700px){.search-filters-bar{gap:8px}.filter-group{flex-direction:column;align-items:flex-start;gap:4px}.filter-select{min-width:140px;width:100%}}
+
+/* ── Fav ── */
+.fav-item{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:12px 14px;transition:border-color .2s}
+.fav-name{font-size:13px;font-weight:700;color:#fff}
+.fav-id{font-size:10px;color:var(--dim);font-family:var(--mono);margin-top:2px}
+.fav-link{text-decoration:none;color:var(--muted);background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:12px;transition:all .2s;flex-shrink:0}
+.fav-link:hover{color:#fff}
+.fav-del{background:rgba(255,51,51,.08);border:1px solid rgba(255,51,51,.15);border-radius:7px;padding:5px 8px;cursor:pointer;color:rgba(255,51,51,.6);transition:all .2s;flex-shrink:0}
+.fav-del:hover{background:rgba(255,51,51,.2);color:var(--red2)}
+
+/* ── Overlay (mobile sidebar) ── */
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:199;backdrop-filter:blur(4px)}
+
+/* ── Mobile ── */
+@media(max-width:768px){
+  .sidebar{position:fixed;top:0;left:0;height:100vh;transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .sidebar-overlay{display:block}
+  .topbar-menu-btn{display:flex;align-items:center;justify-content:center}
+  .content{padding:20px 16px 60px}
+  .topbar-pool-pills{display:none}
+  .grid-2,.grid-3{grid-template-columns:1fr}
+  .compare-grid{grid-template-columns:1fr 28px 1fr}
+  .title-checks{grid-template-columns:1fr}
+  .video-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+  .gap-row{flex-direction:column}
+  .gap-row .btn{width:100%}
+}
+@media(max-width:480px){
+  .video-grid{grid-template-columns:1fr 1fr}
+  .dash-grid{grid-template-columns:1fr 1fr}
+}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:rgba(255,51,51,.25);border-radius:4px}
 </style>
 </head>
 <body>
-<div class="app">
 
-  <!-- HEADER -->
-  <div class="header">
-    <div class="logo">
-      <div class="logo-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.7 15.5V8.5l6.3 3.5-6.3 3.5z"/></svg>
-      </div>
-      <div>
-        <div class="logo-title">Umbra</div>
-        <div class="logo-sub">YouTube Analytics</div>
-      </div>
-    </div>
-    <div class="badge">v3.0 · Railway</div>
-  </div>
+<!-- Sidebar overlay (mobile) -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
-  <!-- POOL STATUS -->
-  <div class="pool-bar">
-    <div class="pool-bar-header">
-      <div class="pulse-dot"></div>
-      <div class="pool-bar-label">Backend ativo · <span id="totalReq">0</span> req hoje</div>
-    </div>
-    <div class="pools-grid" id="poolsGrid">
-      <div style="color:var(--dim);font-size:11px;font-family:var(--mono)">Conectando ao servidor...</div>
-    </div>
-  </div>
-
-  <!-- TABS -->
-  <div class="tab-groups">
-    <div>
-      <div class="tab-group-label g-analise">▸ Análise</div>
-      <div class="tab-row">
-        <button class="tab-btn active-analise" onclick="setTab('channel')" id="tab-channel" data-group="analise">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>Canal
-        </button>
-        <button class="tab-btn" onclick="setTab('video')" id="tab-video" data-group="analise">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10,9 16,12 10,15" fill="currentColor" stroke="none"/></svg>Vídeo
-        </button>
-        <button class="tab-btn" onclick="setTab('compare')" id="tab-compare" data-group="analise">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>Comparar
-        </button>
-        <button class="tab-btn" onclick="setTab('history')" id="tab-history" data-group="analise">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Histórico
-        </button>
-      </div>
+<!-- ═══ SIDEBAR ═══ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.7 15.5V8.5l6.3 3.5-6.3 3.5z"/></svg>
     </div>
     <div>
-      <div class="tab-group-label g-tools">▸ Ferramentas</div>
-      <div class="tab-row">
-        <button class="tab-btn" onclick="setTab('search')" id="tab-search" data-group="tools">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>Pesquisa
-        </button>
-        <button class="tab-btn" onclick="setTab('download')" id="tab-download" data-group="tools">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M3 18h18"/></svg>Download
-        </button>
-        <button class="tab-btn" onclick="setTab('cpm')" id="tab-cpm" data-group="tools">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>CPM/Ganhos
-        </button>
-        <button class="tab-btn" onclick="setTab('seo')" id="tab-seo" data-group="tools">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>SEO Tags
-        </button>
-      </div>
-    </div>
-    <div>
-      <div class="tab-group-label g-extra">▸ Extras</div>
-      <div class="tab-row">
-        <button class="tab-btn" onclick="setTab('favorites')" id="tab-favorites" data-group="extra">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Favoritos
-        </button>
-        <button class="tab-btn" onclick="setTab('export')" id="tab-export" data-group="extra">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Exportar PDF
-        </button>
-      </div>
+      <div class="sidebar-logo-title">Umbra</div>
+      <div class="sidebar-logo-sub">Analytics</div>
     </div>
   </div>
 
-  <div class="divider"></div>
-
-  <!-- CANAL -->
-  <div class="panel active" id="panel-channel">
-    <div class="gap-col">
-      <div class="input-row">
-        <input class="input" id="channelInput" placeholder="Channel ID, @handle ou URL do canal..." onkeydown="if(event.key==='Enter')analyzeChannel()">
-        <button class="btn btn-red" onclick="analyzeChannel()">Analisar</button>
+  <nav class="sidebar-nav">
+    <!-- Dashboard -->
+    <div class="nav-group">
+      <div class="nav-item active" onclick="navTo('dashboard')" id="nav-dashboard">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
       </div>
-      <div id="channelResult"></div>
+      <div class="nav-item" onclick="navTo('discover')" id="nav-discover">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10,8 16,12 10,16"/></svg>
+        Descobrir
+        <span class="nav-badge nav-badge-new">HOT</span>
+      </div>
     </div>
-  </div>
 
-  <!-- VÍDEO -->
-  <div class="panel" id="panel-video">
-    <div class="gap-col">
-      <div class="input-row">
-        <input class="input" id="videoInput" placeholder="Video ID ou URL do YouTube..." onkeydown="if(event.key==='Enter')analyzeVideo()">
-        <button class="btn btn-red" onclick="analyzeVideo()">Analisar</button>
+    <!-- Análise -->
+    <div class="nav-group">
+      <div class="nav-group-label">📊 Análise</div>
+      <div class="nav-item" onclick="navTo('canal')" id="nav-canal">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        Canal
       </div>
-      <div id="videoResult"></div>
+      <div class="nav-item" onclick="navTo('canal-deep')" id="nav-canal-deep">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        Análise Profunda
+      </div>
+      <div class="nav-item" onclick="navTo('video')" id="nav-video">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polygon points="10,9 16,12 10,15" fill="currentColor" stroke="none"/></svg>
+        Vídeo
+      </div>
+      <div class="nav-item" onclick="navTo('eng-reversa')" id="nav-eng-reversa">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v3l2 2"/></svg>
+        Eng. Reversa
+        <span class="nav-badge">NEW</span>
+      </div>
+      <div class="nav-item" onclick="navTo('comparar')" id="nav-comparar">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18"/></svg>
+        Comparar
+      </div>
+      <div class="nav-item" onclick="navTo('historico')" id="nav-historico">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Histórico
+      </div>
     </div>
-  </div>
 
-  <!-- COMPARAR -->
-  <div class="panel" id="panel-compare">
-    <div class="gap-col">
-      <div class="grid-2">
-        <div>
-          <div class="field-label" style="color:rgba(255,80,80,.6)">Canal A</div>
-          <input class="input" id="compareA" placeholder="@handle ou Channel ID...">
-        </div>
-        <div>
-          <div class="field-label" style="color:rgba(78,205,196,.6)">Canal B</div>
-          <input class="input" id="compareB" placeholder="@handle ou Channel ID...">
-        </div>
+    <!-- IA -->
+    <div class="nav-group">
+      <div class="nav-group-label">🧠 IA / Criação</div>
+      <div class="nav-item" onclick="navTo('ia-titulos')" id="nav-ia-titulos">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        Títulos Virais
+        <span class="nav-badge nav-badge-new">IA</span>
       </div>
-      <button class="btn btn-red btn-full" onclick="compareChannels()">Comparar Canais</button>
-      <div id="compareResult"></div>
+      <div class="nav-item" onclick="navTo('ia-descricao')" id="nav-ia-descricao">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Descrição SEO
+        <span class="nav-badge nav-badge-new">IA</span>
+      </div>
+      <div class="nav-item" onclick="navTo('ia-roteiro')" id="nav-ia-roteiro">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        Roteiro
+        <span class="nav-badge nav-badge-new">IA</span>
+      </div>
     </div>
-  </div>
 
-  <!-- HISTÓRICO -->
-  <div class="panel" id="panel-history">
-    <div class="gap-col">
-      <div class="input-row">
-        <input class="input" id="historyInput" placeholder="Channel ID ou @handle..." onkeydown="if(event.key==='Enter')loadHistory()">
-        <button class="btn btn-red" onclick="loadHistory()">Carregar</button>
+    <!-- SEO -->
+    <div class="nav-group">
+      <div class="nav-group-label">🔎 SEO</div>
+      <div class="nav-item" onclick="navTo('seo-tags')" id="nav-seo-tags">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        Tags & SEO
       </div>
-      <div id="historyResult"></div>
     </div>
-  </div>
 
-  <!-- PESQUISA -->
-  <div class="panel" id="panel-search">
-    <div class="gap-col">
-
-      <!-- Mode toggle -->
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="sort-btn active" onclick="setSearchMode('search',this)" id="sm-search">🔍 Pesquisar</button>
-        <button class="sort-btn" onclick="setSearchMode('trending',this)" id="sm-trending">🔥 Trending BR</button>
+    <!-- Ferramentas -->
+    <div class="nav-group">
+      <div class="nav-group-label">🧰 Ferramentas</div>
+      <div class="nav-item" onclick="navTo('pesquisa')" id="nav-pesquisa">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        Pesquisa
       </div>
-
-      <!-- Search input -->
-      <div id="searchInputRow" class="input-row">
-        <input class="input" id="searchInput" placeholder="Buscar canal, nicho, subnicho..." onkeydown="if(event.key==='Enter')doSearch()">
-        <button class="btn btn-red" onclick="doSearch()">Buscar</button>
+      <div class="nav-item" onclick="navTo('download')" id="nav-download">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M3 18h18"/></svg>
+        Download
       </div>
-
-      <!-- Filters row -->
-      <div id="searchFilters" class="search-filters-bar">
-        <div class="filter-group">
-          <label class="filter-label">Nicho:</label>
-          <select class="filter-select" id="filterNicho" onchange="onNichoChange()">
-            <option value="">Todos</option>
-            <option>Automotivo</option>
-            <option>Culinária</option>
-            <option>Documentário</option>
-            <option>Educação</option>
-            <option>Entretenimento</option>
-            <option>Esportes</option>
-            <option>Finanças</option>
-            <option>Gaming</option>
-            <option>História</option>
-            <option>Humor</option>
-            <option>Manufatura</option>
-            <option>Música</option>
-            <option>Negócios</option>
-            <option>Nostalgia</option>
-            <option>Psicologia</option>
-            <option>Saúde</option>
-            <option>Tecnologia</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label class="filter-label">Subnicho:</label>
-          <select class="filter-select" id="filterSubnicho">
-            <option value="">Todos</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label class="filter-label">Idioma:</label>
-          <select class="filter-select" id="filterIdioma">
-            <option value="">Todos</option>
-            <option value="pt">Português</option>
-            <option value="en">English</option>
-            <option value="es">Español</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label class="filter-label">Adicionado:</label>
-          <select class="filter-select" id="filterPeriodo">
-            <option value="">Todo período</option>
-            <option value="today">Hoje</option>
-            <option value="week">Últimos 7 dias</option>
-            <option value="2weeks">Últimos 14 dias</option>
-            <option value="month">Últimos 30 dias</option>
-            <option value="3months">Últimos 3 meses</option>
-            <option value="6months">Últimos 6 meses</option>
-            <option value="year">Último ano</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label class="filter-label">Vídeos:</label>
-          <select class="filter-select" id="filterVideos">
-            <option value="">Todos</option>
-            <option value="short">Curtos (até 4min)</option>
-            <option value="medium">Médios (4-20min)</option>
-            <option value="long">Longos (+20min)</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label class="filter-label">Ordenar:</label>
-          <select class="filter-select" id="filterOrder">
-            <option value="relevance">Mais Relevantes</option>
-            <option value="date">Mais Recentes</option>
-            <option value="viewCount">Mais Vistos</option>
-            <option value="rating">Melhor Avaliados</option>
-          </select>
-        </div>
+      <div class="nav-item" onclick="navTo('cpm')" id="nav-cpm">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        CPM / Ganhos
       </div>
-
-      <!-- Trending button -->
-      <div id="trendingBtn" style="display:none">
-        <button class="btn btn-red btn-full" onclick="loadTrending()">🔥 Carregar Trending Brasil</button>
-      </div>
-
-      <div id="searchResult"></div>
     </div>
-  </div>
 
-  <!-- DOWNLOAD -->
-  <div class="panel" id="panel-download">
-    <div class="gap-col">
-      <div class="input-row">
-        <input class="input" id="downloadInput" placeholder="URL ou ID do vídeo..." onkeydown="if(event.key==='Enter')getDownload()">
-        <button class="btn btn-red" onclick="getDownload()">Buscar</button>
+    <!-- Extras -->
+    <div class="nav-group">
+      <div class="nav-group-label">⭐ Extras</div>
+      <div class="nav-item" onclick="navTo('favoritos')" id="nav-favoritos">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        Favoritos
       </div>
-      <div id="downloadResult"></div>
+      <div class="nav-item" onclick="navTo('exportar')" id="nav-exportar">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Exportar PDF
+      </div>
     </div>
-  </div>
+  </nav>
 
-  <!-- CPM -->
-  <div class="panel" id="panel-cpm">
-    <div class="gap-col">
-      <div class="grid-2">
-        <div>
-          <div class="field-label">Views mensais</div>
-          <input class="input" id="cpmViews" type="number" value="1000000" oninput="calcCPM()">
-        </div>
-        <div>
-          <div class="field-label">% Views monetizadas</div>
-          <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
-            <input type="range" min="10" max="80" value="40" id="cpmCTR" oninput="document.getElementById('ctrVal').textContent=this.value+'%';calcCPM()" style="flex:1">
-            <span id="ctrVal" style="font-family:var(--mono);font-size:13px;color:var(--red);min-width:38px">40%</span>
+  <div class="sidebar-status">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div class="status-dot"></div>
+      <div class="status-text">Backend: <span id="statusLabel">Online</span></div>
+    </div>
+    <div class="status-text" style="padding-left:14px">Req hoje: <span id="totalReq" style="color:var(--yellow);font-weight:700">0</span></div>
+  </div>
+</aside>
+
+<!-- ═══ MAIN ═══ -->
+<main class="main">
+  <!-- Topbar -->
+  <header class="topbar">
+    <button class="topbar-menu-btn" onclick="toggleSidebar()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="topbar-title" id="topbarTitle">Dashboard</div>
+    <div class="topbar-right">
+      <div class="topbar-pool-pills" id="poolPills"></div>
+      <div class="topbar-version">v5.0 · Railway</div>
+    </div>
+  </header>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- ─── DASHBOARD ─── -->
+    <div class="panel active" id="panel-dashboard">
+      <div class="page-header">
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub">Bem-vindo ao Umbra YouTube Analytics</div>
+      </div>
+
+      <!-- Vídeo de apresentação -->
+      <div class="video-hero-container" style="margin-bottom:24px">
+        <div class="video-hero-inner" id="heroVideoInner">
+          <div class="video-hero-placeholder">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,51,51,0.4)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polygon points="10,8 16,12 10,16" fill="rgba(255,51,51,0.4)" stroke="none"/></svg>
+            <span>Adicione o vídeo de apresentação abaixo</span>
           </div>
         </div>
-      </div>
-      <div><div class="field-label">Nicho</div><div class="niche-grid" id="nicheGrid"></div></div>
-      <div><div class="field-label">País do público</div><div class="niche-grid" id="countryGrid"></div></div>
-      <div class="earnings-box">
-        <div class="field-label">Estimativa de ganhos</div>
-        <div class="stats-grid" id="earningsCards" style="margin-top:12px"></div>
-        <div class="earnings-note" id="earningsNote"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- SEO -->
-  <div class="panel" id="panel-seo">
-    <div class="gap-col">
-      <div><div class="field-label">Título do vídeo *</div><input class="input" id="seoTitle" placeholder="ex: Como ganhar dinheiro no YouTube em 2025"></div>
-      <div><div class="field-label">Descrição (opcional)</div><textarea class="input" id="seoDesc" placeholder="Breve descrição do conteúdo..."></textarea></div>
-      <div><div class="field-label">Categoria</div><input class="input" id="seoCategory" placeholder="ex: Finance, Gaming, Tech..."></div>
-      <button class="btn btn-red btn-full" onclick="analyzeSEO()">✨ Gerar Tags SEO</button>
-      <div id="seoResult"></div>
-    </div>
-  </div>
-
-  <!-- FAVORITOS -->
-  <div class="panel" id="panel-favorites">
-    <div class="gap-col">
-      <div class="card">
-        <div class="field-label" style="margin-bottom:12px">Adicionar favorito</div>
-        <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
-          <button class="sort-btn active" onclick="setFavType('channel',this)">Canal</button>
-          <button class="sort-btn" onclick="setFavType('video',this)">Vídeo</button>
-          <button class="sort-btn" onclick="setFavType('search',this)">Pesquisa</button>
-        </div>
-        <div class="gap-col" style="gap:10px">
-          <input class="input" id="favName" placeholder="Nome / apelido">
-          <input class="input" id="favId" placeholder="Channel ID, Video ID ou termo..." onkeydown="if(event.key==='Enter')addFavorite()">
-          <button class="btn btn-green" onclick="addFavorite()">⭐ Salvar favorito</button>
+        <div class="video-url-input">
+          <input class="input" id="heroVideoUrl" placeholder="Cole a URL do YouTube (ex: https://youtube.com/watch?v=...)" style="font-size:12px;padding:9px 14px" onkeydown="if(event.key==='Enter')setHeroVideo()">
+          <button class="btn btn-red" onclick="setHeroVideo()" style="padding:9px 18px;font-size:12px">Salvar</button>
+          <button class="btn btn-ghost" onclick="clearHeroVideo()" style="padding:9px 14px;font-size:12px">Limpar</button>
         </div>
       </div>
-      <div id="favList"></div>
-    </div>
-  </div>
 
-  <!-- EXPORT PDF -->
-  <div class="panel" id="panel-export">
-    <div class="gap-col">
-      <div class="card">
-        <div class="field-label" style="margin-bottom:12px">Gerar relatório PDF do canal</div>
-        <div class="input-row">
-          <input class="input" id="exportInput" placeholder="Channel ID ou @handle..." onkeydown="if(event.key==='Enter')exportPDF()">
-          <button class="btn btn-red" onclick="exportPDF()">📄 Exportar PDF</button>
+      <div class="dash-grid" id="dashCards">
+        <div class="dash-card" onclick="navTo('canal')">
+          <div class="dash-card-icon">📊</div>
+          <div class="dash-card-val" style="color:var(--red2)">Canal</div>
+          <div class="dash-card-label">Análise de canal</div>
+          <div class="dash-card-sub" style="color:var(--muted)">Inscritos · Views · Vídeos</div>
+          <div class="dash-accent" style="background:var(--red)"></div>
+        </div>
+        <div class="dash-card" onclick="navTo('discover')">
+          <div class="dash-card-icon">🔥</div>
+          <div class="dash-card-val" style="color:var(--orange)">Feed</div>
+          <div class="dash-card-label">Vídeos em alta</div>
+          <div class="dash-card-sub" style="color:var(--muted)">Trending · Descobrir</div>
+          <div class="dash-accent" style="background:var(--orange)"></div>
+        </div>
+        <div class="dash-card" onclick="navTo('ia-titulos')">
+          <div class="dash-card-icon">🧠</div>
+          <div class="dash-card-val" style="color:var(--purple)">IA</div>
+          <div class="dash-card-label">Gerador de títulos</div>
+          <div class="dash-card-sub" style="color:var(--muted)">Viral · SEO · Roteiro</div>
+          <div class="dash-accent" style="background:var(--purple)"></div>
+        </div>
+        <div class="dash-card" onclick="navTo('eng-reversa')">
+          <div class="dash-card-icon">🔬</div>
+          <div class="dash-card-val" style="color:var(--cyan)">Reversa</div>
+          <div class="dash-card-label">Eng. Reversa</div>
+          <div class="dash-card-sub" style="color:var(--muted)">Score Viral · Tags · Título</div>
+          <div class="dash-accent" style="background:var(--cyan)"></div>
+        </div>
+        <div class="dash-card" onclick="navTo('cpm')">
+          <div class="dash-card-icon">💰</div>
+          <div class="dash-card-val" style="color:var(--green)">CPM</div>
+          <div class="dash-card-label">Calculadora de ganhos</div>
+          <div class="dash-card-sub" style="color:var(--muted)">Por nicho e país</div>
+          <div class="dash-accent" style="background:var(--green)"></div>
+        </div>
+        <div class="dash-card" onclick="navTo('download')">
+          <div class="dash-card-icon">⬇️</div>
+          <div class="dash-card-val" style="color:var(--yellow)">Download</div>
+          <div class="dash-card-label">Baixar vídeos</div>
+          <div class="dash-card-sub" style="color:var(--muted)">MP4 · MP3 · Múltiplas qualidades</div>
+          <div class="dash-accent" style="background:var(--yellow)"></div>
         </div>
       </div>
-      <div id="exportResult"></div>
-    </div>
-  </div>
 
-</div>
+      <!-- API Status -->
+      <div class="card" style="margin-top:8px">
+        <div class="field-label" style="margin-bottom:14px">Status das APIs</div>
+        <div id="dashPoolStatus" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+          <div style="color:var(--dim);font-size:11px;font-family:var(--mono)">Carregando...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── DESCOBRIR ─── -->
+    <div class="panel" id="panel-discover">
+      <div class="page-header">
+        <div class="page-title">🔥 Descobrir</div>
+        <div class="page-sub">Vídeos em alta no YouTube — clique em Analisar para análise completa</div>
+      </div>
+      <div class="feed-filters" id="feedFilters">
+        <button class="feed-filter-btn active" onclick="setFeedFilter('BR',this)">🇧🇷 Brasil</button>
+        <button class="feed-filter-btn" onclick="setFeedFilter('US',this)">🇺🇸 Global</button>
+        <button class="feed-filter-btn" onclick="setFeedFilter('BR','20',this)">🎮 Gaming</button>
+        <button class="feed-filter-btn" onclick="setFeedFilter('BR','10',this)">🎵 Música</button>
+        <button class="feed-filter-btn" onclick="setFeedFilter('BR','25',this)">📰 Notícias</button>
+        <button class="feed-filter-btn" onclick="setFeedFilter('BR','17',this)">🏅 Esportes</button>
+        <button class="feed-filter-btn" onclick="setFeedFilter('BR','28',this)">🔬 Ciência</button>
+        <button class="feed-filter-btn" onclick="loadFeed()" style="margin-left:auto">🔄 Atualizar</button>
+      </div>
+      <div class="video-grid" id="feedGrid">
+        <div class="loading-row"><svg class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Carregando feed...</div>
+      </div>
+    </div>
+
+    <!-- ─── CANAL ─── -->
+    <div class="panel" id="panel-canal">
+      <div class="page-header"><div class="page-title">Análise de Canal</div><div class="page-sub">Stats gerais do canal — inscritos, views, vídeos</div></div>
+      <div class="gap-col">
+        <div class="input-row"><input class="input" id="channelInput" placeholder="Channel ID, @handle ou URL do canal..." onkeydown="if(event.key==='Enter')analyzeChannel()"><button class="btn btn-red" onclick="analyzeChannel()">Analisar</button></div>
+        <div id="channelResult"></div>
+      </div>
+    </div>
+
+    <!-- ─── ANÁLISE PROFUNDA ─── -->
+    <div class="panel" id="panel-canal-deep">
+      <div class="page-header"><div class="page-title">Análise Profunda</div><div class="page-sub">Média de views, tendência, melhor horário, frequência de upload</div></div>
+      <div class="gap-col">
+        <div class="alert alert-info">Analisa os últimos 20 vídeos do canal — usa 3 requisições da API.</div>
+        <div class="input-row"><input class="input" id="deepInput" placeholder="Channel ID, @handle ou URL..." onkeydown="if(event.key==='Enter')deepAnalysis()"><button class="btn btn-red" onclick="deepAnalysis()">Analisar Fundo</button></div>
+        <div id="deepResult"></div>
+      </div>
+    </div>
+
+    <!-- ─── VÍDEO ─── -->
+    <div class="panel" id="panel-video">
+      <div class="page-header"><div class="page-title">Análise de Vídeo</div><div class="page-sub">Views, likes, comentários, engajamento</div></div>
+      <div class="gap-col">
+        <div class="input-row"><input class="input" id="videoInput" placeholder="Video ID ou URL do YouTube..." onkeydown="if(event.key==='Enter')analyzeVideo()"><button class="btn btn-red" onclick="analyzeVideo()">Analisar</button></div>
+        <div id="videoResult"></div>
+      </div>
+    </div>
+
+    <!-- ─── ENG REVERSA ─── -->
+    <div class="panel" id="panel-eng-reversa">
+      <div class="page-header"><div class="page-title">Engenharia Reversa</div><div class="page-sub">Desmonta a fórmula de qualquer vídeo — score viral, análise de título, tags</div></div>
+      <div class="gap-col">
+        <div class="alert alert-info">🔬 Insira qualquer vídeo viral para descobrir por que ele funcionou.</div>
+        <div class="input-row"><input class="input" id="reverseInput" placeholder="URL ou ID do vídeo..." onkeydown="if(event.key==='Enter')reverseEngineer()"><button class="btn btn-red" onclick="reverseEngineer()">Reverter</button></div>
+        <div id="reverseResult"></div>
+      </div>
+    </div>
+
+    <!-- ─── COMPARAR ─── -->
+    <div class="panel" id="panel-comparar">
+      <div class="page-header"><div class="page-title">Comparar Canais</div><div class="page-sub">Dois canais lado a lado</div></div>
+      <div class="gap-col">
+        <div class="grid-2">
+          <div><div class="field-label" style="color:rgba(255,51,51,.6)">Canal A</div><input class="input" id="compareA" placeholder="@handle ou Channel ID..."></div>
+          <div><div class="field-label" style="color:rgba(34,211,238,.6)">Canal B</div><input class="input" id="compareB" placeholder="@handle ou Channel ID..."></div>
+        </div>
+        <button class="btn btn-red btn-full" onclick="compareChannels()">Comparar Canais</button>
+        <div id="compareResult"></div>
+      </div>
+    </div>
+
+    <!-- ─── HISTÓRICO ─── -->
+    <div class="panel" id="panel-historico">
+      <div class="page-header"><div class="page-title">Histórico de Vídeos</div><div class="page-sub">Últimos 20 vídeos do canal ordenados por performance</div></div>
+      <div class="gap-col">
+        <div class="input-row"><input class="input" id="historyInput" placeholder="Channel ID ou @handle..." onkeydown="if(event.key==='Enter')loadHistory()"><button class="btn btn-red" onclick="loadHistory()">Carregar</button></div>
+        <div id="historyResult"></div>
+      </div>
+    </div>
+
+    <!-- ─── IA: TÍTULOS ─── -->
+    <div class="panel" id="panel-ia-titulos">
+      <div class="page-header"><div class="page-title">🧠 Gerador de Títulos Virais</div><div class="page-sub">Gera 10 títulos otimizados para CTR com score de viralização</div></div>
+      <div class="gap-col">
+        <div><div class="field-label">Tema ou assunto do vídeo *</div><input class="input" id="iaTituloTema" placeholder="ex: Como ganhar dinheiro no YouTube, História da Segunda Guerra..."></div>
+        <div class="grid-2">
+          <div><div class="field-label">Nicho</div>
+            <select class="input" id="iaTituloNicho" style="font-family:var(--mono);font-size:12px">
+              <option value="geral">Geral</option><option>Finanças</option><option>Gaming</option><option>História</option><option>Tecnologia</option><option>Entretenimento</option><option>Saúde</option><option>Educação</option><option>Humor</option><option>Esportes</option>
+            </select>
+          </div>
+          <div><div class="field-label">Estilo</div>
+            <select class="input" id="iaTituloEstilo" style="font-family:var(--mono);font-size:12px">
+              <option value="viral">Viral / Clickbait</option><option value="storytelling">Storytelling</option><option value="tutorial">Tutorial / How-to</option><option value="curiosidade">Curiosidade</option><option value="lista">Lista (Top 10)</option><option value="polemica">Polêmica</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-red btn-full" onclick="generateTitles()">✨ Gerar 10 Títulos</button>
+        <div id="iaTitulosResult"></div>
+      </div>
+    </div>
+
+    <!-- ─── IA: DESCRIÇÃO ─── -->
+    <div class="panel" id="panel-ia-descricao">
+      <div class="page-header"><div class="page-title">🧠 Gerador de Descrição SEO</div><div class="page-sub">Descrição completa com palavras-chave, timestamps e hashtags</div></div>
+      <div class="gap-col">
+        <div><div class="field-label">Título do vídeo *</div><input class="input" id="iaDescTitulo" placeholder="Título do seu vídeo..."></div>
+        <div><div class="field-label">Pontos principais do vídeo</div><textarea class="input" id="iaDescPontos" placeholder="ex: Como monetizar, estratégias de crescimento, ferramentas..."></textarea></div>
+        <div class="grid-2">
+          <div><div class="field-label">Canal / Nome</div><input class="input" id="iaDescCanal" placeholder="Nome do seu canal..."></div>
+          <div><div class="field-label">Nicho</div>
+            <select class="input" id="iaDescNicho" style="font-family:var(--mono);font-size:12px">
+              <option value="geral">Geral</option><option>Finanças</option><option>Gaming</option><option>História</option><option>Tecnologia</option><option>Educação</option><option>Entretenimento</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-red btn-full" onclick="generateDescription()">✨ Gerar Descrição Completa</button>
+        <div id="iaDescResult"></div>
+      </div>
+    </div>
+
+    <!-- ─── IA: ROTEIRO ─── -->
+    <div class="panel" id="panel-ia-roteiro">
+      <div class="page-header"><div class="page-title">🧠 Gerador de Roteiro</div><div class="page-sub">Roteiro completo com hook, desenvolvimento e CTA</div></div>
+      <div class="gap-col">
+        <div><div class="field-label">Tema do vídeo *</div><input class="input" id="iaRoteiroTema" placeholder="ex: Como crescer no YouTube do zero em 2025..."></div>
+        <div class="grid-2">
+          <div><div class="field-label">Formato</div>
+            <select class="input" id="iaRoteiroFormato" style="font-family:var(--mono);font-size:12px">
+              <option value="curto">Curto (5-8 min)</option><option value="medio">Médio (10-15 min)</option><option value="longo">Longo (20-30 min)</option><option value="short">Short / Reel (60s)</option>
+            </select>
+          </div>
+          <div><div class="field-label">Estilo de narração</div>
+            <select class="input" id="iaRoteiroEstilo" style="font-family:var(--mono);font-size:12px">
+              <option value="educativo">Educativo</option><option value="storytelling">Storytelling</option><option value="casual">Casual / Conversacional</option><option value="dramatico">Dramático</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-red btn-full" onclick="generateRoteiro()">✨ Gerar Roteiro Completo</button>
+        <div id="iaRoteiroResult"></div>
+      </div>
+    </div>
+
+    <!-- ─── SEO TAGS ─── -->
+    <div class="panel" id="panel-seo-tags">
+      <div class="page-header"><div class="page-title">Tags & SEO</div><div class="page-sub">Score do título, tags otimizadas e dicas de melhoria</div></div>
+      <div class="gap-col">
+        <div><div class="field-label">Título do vídeo *</div><input class="input" id="seoTitle" placeholder="ex: Como ganhar dinheiro no YouTube em 2025"></div>
+        <div><div class="field-label">Descrição (opcional)</div><textarea class="input" id="seoDesc" placeholder="Breve descrição..."></textarea></div>
+        <div><div class="field-label">Categoria</div><input class="input" id="seoCategory" placeholder="ex: Finance, Gaming, Tech..."></div>
+        <button class="btn btn-red btn-full" onclick="analyzeSEO()">✨ Gerar Tags SEO</button>
+        <div id="seoResult"></div>
+      </div>
+    </div>
+
+    <!-- ─── PESQUISA ─── -->
+    <div class="panel" id="panel-pesquisa">
+      <div class="page-header"><div class="page-title">Pesquisa de Vídeos</div><div class="page-sub">Busca com filtros avançados de nicho, idioma, período e duração</div></div>
+      <div class="gap-col">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="sort-btn active" onclick="setSearchMode('search',this)">🔍 Pesquisar</button>
+          <button class="sort-btn" onclick="setSearchMode('trending',this)">🔥 Trending BR</button>
+        </div>
+        <div id="searchInputRow" class="input-row">
+          <input class="input" id="searchInput" placeholder="Buscar vídeos..." onkeydown="if(event.key==='Enter')doSearch()">
+          <button class="btn btn-red" onclick="doSearch()">Buscar</button>
+        </div>
+        <div id="searchFilters" class="search-filters-bar">
+          <div class="filter-group"><label class="filter-label">Nicho:</label><select class="filter-select" id="filterNicho" onchange="onNichoChange()"><option value="">Todos</option><option>Automotivo</option><option>Culinária</option><option>Documentário</option><option>Educação</option><option>Entretenimento</option><option>Esportes</option><option>Finanças</option><option>Gaming</option><option>História</option><option>Humor</option><option>Manufatura</option><option>Música</option><option>Negócios</option><option>Nostalgia</option><option>Psicologia</option><option>Saúde</option><option>Tecnologia</option></select></div>
+          <div class="filter-group"><label class="filter-label">Subnicho:</label><select class="filter-select" id="filterSubnicho"><option value="">Todos</option></select></div>
+          <div class="filter-group"><label class="filter-label">Idioma:</label><select class="filter-select" id="filterIdioma"><option value="">Todos</option><option value="pt">Português</option><option value="en">English</option><option value="es">Español</option></select></div>
+          <div class="filter-group"><label class="filter-label">Período:</label><select class="filter-select" id="filterPeriodo"><option value="">Todo período</option><option value="today">Hoje</option><option value="week">Últimos 7 dias</option><option value="2weeks">Últimos 14 dias</option><option value="month">Últimos 30 dias</option><option value="3months">Últimos 3 meses</option><option value="6months">Últimos 6 meses</option><option value="year">Último ano</option></select></div>
+          <div class="filter-group"><label class="filter-label">Duração:</label><select class="filter-select" id="filterVideos"><option value="">Todos</option><option value="short">Curtos</option><option value="medium">Médios</option><option value="long">Longos</option></select></div>
+          <div class="filter-group"><label class="filter-label">Ordenar:</label><select class="filter-select" id="filterOrder"><option value="relevance">Relevância</option><option value="date">Mais Recentes</option><option value="viewCount">Mais Vistos</option><option value="rating">Melhor Avaliados</option></select></div>
+        </div>
+        <div id="trendingBtn" style="display:none"><button class="btn btn-red btn-full" onclick="loadTrending()">🔥 Carregar Trending Brasil</button></div>
+        <div id="searchResult"></div>
+      </div>
+    </div>
+
+    <!-- ─── DOWNLOAD ─── -->
+    <div class="panel" id="panel-download">
+      <div class="page-header"><div class="page-title">Download</div><div class="page-sub">Baixe vídeos e áudios em múltiplas qualidades</div></div>
+      <div class="gap-col">
+        <div class="input-row"><input class="input" id="downloadInput" placeholder="URL ou ID do vídeo..." onkeydown="if(event.key==='Enter')getDownload()"><button class="btn btn-red" onclick="getDownload()">Buscar</button></div>
+        <div id="downloadResult"></div>
+      </div>
+    </div>
+
+    <!-- ─── CPM ─── -->
+    <div class="panel" id="panel-cpm">
+      <div class="page-header"><div class="page-title">CPM / Ganhos</div><div class="page-sub">Estimativa de receita por nicho e região</div></div>
+      <div class="gap-col">
+        <div class="grid-2">
+          <div><div class="field-label">Views mensais</div><input class="input" id="cpmViews" type="number" value="1000000" oninput="calcCPM()"></div>
+          <div><div class="field-label">% Views monetizadas</div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+              <input type="range" min="10" max="80" value="40" id="cpmCTR" oninput="document.getElementById('ctrVal').textContent=this.value+'%';calcCPM()" style="flex:1">
+              <span id="ctrVal" style="font-family:var(--mono);font-size:13px;color:var(--red);min-width:38px">40%</span>
+            </div>
+          </div>
+        </div>
+        <div><div class="field-label">Nicho</div><div style="display:flex;flex-wrap:wrap;gap:6px" id="nicheGrid"></div></div>
+        <div><div class="field-label">País do público</div><div style="display:flex;flex-wrap:wrap;gap:6px" id="countryGrid"></div></div>
+        <div class="card"><div class="field-label">Estimativa de ganhos</div><div class="grid-auto" id="earningsCards" style="margin-top:12px"></div><div id="earningsNote" style="font-size:9px;color:var(--dim);line-height:1.7;font-family:var(--mono);margin-top:14px"></div></div>
+      </div>
+    </div>
+
+    <!-- ─── FAVORITOS ─── -->
+    <div class="panel" id="panel-favoritos">
+      <div class="page-header"><div class="page-title">Favoritos</div><div class="page-sub">Canais e vídeos salvos</div></div>
+      <div class="gap-col">
+        <div class="card">
+          <div class="field-label" style="margin-bottom:12px">Adicionar favorito</div>
+          <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+            <button class="sort-btn active" onclick="setFavType('channel',this)">Canal</button>
+            <button class="sort-btn" onclick="setFavType('video',this)">Vídeo</button>
+            <button class="sort-btn" onclick="setFavType('search',this)">Pesquisa</button>
+          </div>
+          <div class="gap-col" style="gap:10px">
+            <input class="input" id="favName" placeholder="Nome / apelido">
+            <input class="input" id="favId" placeholder="Channel ID, Video ID ou termo..." onkeydown="if(event.key==='Enter')addFavorite()">
+            <button class="btn btn-red" onclick="addFavorite()" style="background:linear-gradient(135deg,#22c55e,#15803d)">⭐ Salvar</button>
+          </div>
+        </div>
+        <div id="favList"></div>
+      </div>
+    </div>
+
+    <!-- ─── EXPORTAR ─── -->
+    <div class="panel" id="panel-exportar">
+      <div class="page-header"><div class="page-title">Exportar PDF</div><div class="page-sub">Relatório profissional com branding Umbra</div></div>
+      <div class="gap-col">
+        <div class="card">
+          <div class="field-label" style="margin-bottom:12px">Canal para exportar</div>
+          <div class="input-row"><input class="input" id="exportInput" placeholder="Channel ID ou @handle..." onkeydown="if(event.key==='Enter')exportPDF()"><button class="btn btn-red" onclick="exportPDF()">📄 Exportar</button></div>
+        </div>
+        <div id="exportResult"></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</main>
+
 <script src="/app.js"></script>
 </body>
 </html>
