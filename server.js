@@ -283,9 +283,11 @@ app.get('/api/search', async (req, res) => {
 // Trending
 app.get('/api/trending', async (req, res) => {
   try {
-    const { region='BR', max=20, category='' } = req.query;
-    const params=new URLSearchParams({ part:'snippet,statistics', chart:'mostPopular', regionCode:region, maxResults:max });
+    const { region='BR', max=20, category='', videoDuration='' } = req.query;
+    const clampedMax = Math.min(parseInt(max)||20, 50); // API hard limit
+    const params=new URLSearchParams({ part:'snippet,statistics', chart:'mostPopular', regionCode:region, maxResults:clampedMax });
     if(category) params.set('videoCategoryId',category);
+    if(videoDuration) params.set('videoDuration', videoDuration);
     const data = await poolFetch(POOLS.yt_main, `https://${POOLS.yt_main.host}/videos?${params.toString()}`);
     res.json((data.items||[]).map(v=>({ videoId:v.id, title:v.snippet.title, channelTitle:v.snippet.channelTitle, thumbnail:v.snippet.thumbnails?.high?.url, views:v.statistics.viewCount, likes:v.statistics.likeCount, publishedAt:v.snippet.publishedAt, categoryId:v.snippet.categoryId })));
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -296,11 +298,134 @@ app.get('/api/download', async (req, res) => {
   try {
     const { id } = req.query;
     if (!id) return res.status(400).json({ error: 'id obrigatorio' });
-    const data = await poolFetch(POOLS.downloader, `https://${POOLS.downloader.host}/v2/video/details?videoId=${encodeURIComponent(id)}`);
-    const formats=[];
-    (data.videos?.items||[]).slice(0,6).forEach(f=>formats.push({ type:'video', quality:f.quality||f.qualityLabel||'?', ext:f.extension||'mp4', url:f.url, size:f.sizeText||null }));
-    (data.audios?.items||[]).slice(0,3).forEach(f=>formats.push({ type:'audio', quality:f.quality||f.bitrate||'audio', ext:f.extension||'mp3', url:f.url, size:f.sizeText||null }));
-    res.json({ title:data.title, thumbnail:data.thumbnail?.url||data.thumbnails?.[0]?.url, duration:data.duration, formats });
+
+    // Try endpoint v2 first, then v3 as fallback
+    let data = null;
+    const endpoints = [
+      `https://${POOLS.downloader.host}/v2/video/details?videoId=${encodeURIComponent(id)}`,
+      `https://${POOLS.downloader.host}/v3/video/details?videoId=${encodeURIComponent(id)}`,
+      `https://${POOLS.downloader.host}/v2/video?videoId=${encodeURIComponent(id)}`,
+    ];
+    let lastErr = '';
+    for (const url of endpoints) {
+      try {
+        data = await poolFetch(POOLS.downloader, url);
+        if (data && (data.videos || data.audios || data.formats || data.title)) break;
+      } catch(e) { lastErr = e.message; data = null; }
+    }
+    if (!data) return res.status(500).json({ error: `Downloader indisponível: ${lastErr}` });
+
+    const formats = [];
+    // v2 structure
+    (data.videos?.items || []).slice(0, 8).forEach(f => {
+      if (!f.url) return;
+      formats.push({ type:'video', quality: f.quality || f.qualityLabel || f.resolution || '?', ext: f.extension || f.ext || 'mp4', url: f.url, size: f.sizeText || f.size || null });
+    });
+    (data.audios?.items || []).slice(0, 4).forEach(f => {
+      if (!f.url) return;
+      formats.push({ type:'audio', quality: f.quality || f.bitrate || 'MP3', ext: f.extension || f.ext || 'mp3', url: f.url, size: f.sizeText || f.size || null });
+    });
+    // v3 / alternate structure
+    (data.formats || []).forEach(f => {
+      if (!f.url) return;
+      const type = (f.hasVideo || f.vcodec) ? 'video' : 'audio';
+      formats.push({ type, quality: f.qualityLabel || f.quality || f.resolution || '?', ext: f.ext || f.extension || 'mp4', url: f.url, size: null });
+    });
+
+    if (!formats.length) return res.status(500).json({ error: 'Nenhum formato disponível para este vídeo.' });
+
+    const thumb = data.thumbnail?.url || data.thumbnails?.[0]?.url || data.thumbnail || null;
+    res.json({ title: data.title, thumbnail: thumb, duration: data.duration, formats });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════
+//  MISTRAL AI — helper
+// ═══════════════════════════════════════════════════════
+const MISTRAL_KEY = process.env.MISTRAL_API_KEY || '';
+
+async function mistral(systemPrompt, userPrompt) {
+  if (!MISTRAL_KEY) throw new Error('MISTRAL_API_KEY não configurada no Railway.');
+  const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MISTRAL_KEY}` },
+    body: JSON.stringify({
+      model: 'mistral-small-latest',
+      temperature: 0.85,
+      max_tokens: 1200,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userPrompt   },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    let msg = `Mistral HTTP ${res.status}`;
+    try { const j = await res.json(); msg = j?.message || j?.error?.message || msg; } catch {}
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content?.trim() || '';
+}
+
+// IA — Títulos virais
+app.post('/api/ia/titulos', async (req, res) => {
+  try {
+    const { tema, nicho = 'geral', estilo = 'viral' } = req.body;
+    if (!tema) return res.status(400).json({ error: 'tema obrigatorio' });
+    const system = `Você é um especialista em YouTube com mais de 10 anos de experiência criando títulos virais. 
+Responda SOMENTE com um array JSON válido contendo exatamente 10 objetos, sem texto antes ou depois.
+Formato: [{"text":"título aqui","score":85}, ...]
+O score é de 0 a 99 e reflete o potencial viral do título.`;
+    const user = `Crie 10 títulos para YouTube em português brasileiro.
+Tema: ${tema}
+Nicho: ${nicho}
+Estilo: ${estilo}
+Regras: títulos impactantes, entre 40-70 caracteres, use palavras de poder, números quando fizer sentido, emojis estratégicos. Varie os formatos. Pense no que faria uma pessoa parar e clicar.`;
+    const raw = await mistral(system, user);
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const titles = JSON.parse(clean);
+    res.json({ titles });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// IA — Descrição SEO
+app.post('/api/ia/descricao', async (req, res) => {
+  try {
+    const { titulo, pontos = '', canal = '', nicho = 'geral' } = req.body;
+    if (!titulo) return res.status(400).json({ error: 'titulo obrigatorio' });
+    const system = `Você é um especialista em SEO para YouTube. Escreva descrições otimizadas que rankeiam bem e convertem espectadores em inscritos. Responda APENAS com a descrição pronta, sem explicações.`;
+    const user = `Crie uma descrição SEO completa para o vídeo abaixo.
+Título: ${titulo}
+Nicho: ${nicho}
+${pontos ? `Pontos principais: ${pontos}` : ''}
+${canal ? `Nome do canal: ${canal}` : ''}
+
+A descrição deve ter: parágrafo de abertura com palavra-chave, timestamps (00:00, etc), CTA de inscrição, links placeholder, hashtags relevantes. Mínimo 300 palavras.`;
+    const desc = await mistral(system, user);
+    res.json({ description: desc });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// IA — Roteiro
+app.post('/api/ia/roteiro', async (req, res) => {
+  try {
+    const { tema, formato = 'medio', estilo = 'educativo' } = req.body;
+    if (!tema) return res.status(400).json({ error: 'tema obrigatorio' });
+    const durations = { curto:'5-8 min', medio:'10-15 min', longo:'20-30 min', short:'60 segundos' };
+    const system = `Você é um roteirista experiente de YouTube com domínio em retenção de audiência e storytelling. Responda SOMENTE com um array JSON válido, sem texto antes ou depois.
+Formato: [{"title":"Nome da seção","content":"Texto do roteiro aqui"}, ...]`;
+    const user = `Crie um roteiro detalhado de YouTube para:
+Tema: ${tema}
+Duração: ${durations[formato] || '10-15 min'}
+Estilo: ${estilo}
+Formato: ${formato === 'short' ? 'YouTube Short (60s)' : 'vídeo normal'}
+
+Inclua: hook poderoso, introdução, 2-4 blocos de desenvolvimento com scripts reais (não só instruções), conclusão com CTA. Seja específico — escreva o que o criador vai FALAR, não só o que fazer.`;
+    const raw = await mistral(system, user);
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const sections = JSON.parse(clean);
+    res.json({ sections });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
