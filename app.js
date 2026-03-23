@@ -115,22 +115,20 @@ function closeSidebar()  {
 }
 
 // ── Dashboard Hero Video ──────────────────────────────────────────────────────
-function setHeroVideo() {
-  const url = document.getElementById('heroVideoUrl').value.trim();
-  if (!url) return;
-  const id = extractVideoId(url);
-  if (!id || id === url) { alert('URL do YouTube inválida'); return; }
-  localStorage.setItem('umbra_hero_video', id);
-  renderHeroVideo(id);
-}
-function clearHeroVideo() {
-  localStorage.removeItem('umbra_hero_video');
-  document.getElementById('heroVideoUrl').value = '';
-  document.getElementById('heroVideoInner').innerHTML = `<div class="video-hero-placeholder"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,51,51,0.4)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polygon points="10,8 16,12 10,16" fill="rgba(255,51,51,0.4)" stroke="none"/></svg><span>Adicione o vídeo de apresentação abaixo</span></div>`;
-}
+// Vídeo fixo — troque o ID abaixo para mudar o vídeo do dashboard
+const HERO_VIDEO_ID = '';   // <- coloque aqui o ID do vídeo (ex: 'dQw4w9WgXcQ')
+
 function renderHeroVideo(id) {
-  document.getElementById('heroVideoInner').innerHTML = `<iframe src="https://www.youtube.com/embed/${id}?rel=0" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>`;
+  const el = document.getElementById('heroVideoInner');
+  if (!el) return;
+  if (!id) {
+    el.innerHTML = '<div class="video-hero-placeholder"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,51,51,0.4)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polygon points="10,8 16,12 10,16" fill="rgba(255,51,51,0.4)" stroke="none"/></svg><span>Nenhum vídeo configurado</span></div>';
+    return;
+  }
+  el.innerHTML = '<iframe src="https://www.youtube.com/embed/' + id + '?rel=0" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>';
 }
+
+
 
 // ── Discover Feed ─────────────────────────────────────────────────────────────
 let feedRegion = 'BR', feedCategory = '';
@@ -543,7 +541,7 @@ function generateRoteiro() {
   ] : [
     { title:'🎯 Hook (0-30s) — CRUCIAL', content:`Comece com a promessa mais forte do vídeo. Exemplo: "Nos próximos minutos você vai descobrir [resultado incrível sobre ${tema}]. Fica até o final porque tem um segredo que mudou tudo para mim."` },
     { title:'👋 Introdução (30s-1min)', content:`Se apresente brevemente${estilo==='casual'?' de forma descontraída':''} e reforce o que o espectador vai ganhar assistindo. Crie expectativa com uma prévia do conteúdo.` },
-    { title:'📖 Desenvolvimento — Bloco 1 (1-${formato==='curto'?'3':'5'}min)', content:`Primeiro ponto principal sobre ${tema}. Use exemplos práticos, dados ou histórias${estilo==='storytelling'?' pessoais':' relevantes'}. Termine com uma transição para o próximo bloco.` },
+    { title:`📖 Desenvolvimento — Bloco 1 (1-${formato==='curto'?'3':'5'}min)`, content:`Primeiro ponto principal sobre ${tema}. Use exemplos práticos, dados ou histórias${estilo==='storytelling'?' pessoais':' relevantes'}. Termine com uma transição para o próximo bloco.` },
     { title:`📖 Desenvolvimento — Bloco 2 (${formato==='curto'?'3-5':'5-10'}min)`, content:`Segundo ponto — aprofunde o tema. Mostre resultados, casos reais, comparações. Mantenha o ritmo${estilo==='dramatico'?' com música de fundo e pausas dramáticas':''}.` },
     ...(formato !== 'curto' ? [{ title:'📖 Desenvolvimento — Bloco 3 (10-15min)', content:`Terceiro ponto — o mais valioso e inesperado. "O que a maioria não sabe sobre ${tema}..." ou "O erro fatal que todo mundo comete...". Gere emoção.` }] : []),
     { title:'🔑 Conclusão e resumo', content:`Resuma os pontos principais em 3 bullets rápidos. Reforce a transformação que o espectador teve assistindo.` },
@@ -728,10 +726,6 @@ async function exportPDF(){
   renderFavs();
   fetchStatus();
   setInterval(fetchStatus, 30000);
-  // Restore hero video
-  const savedVideo = localStorage.getItem('umbra_hero_video');
-  if (savedVideo) {
-    document.getElementById('heroVideoUrl').value = `https://youtube.com/watch?v=${savedVideo}`;
-    renderHeroVideo(savedVideo);
-  }
+  // Hero video fixo (definido na constante HERO_VIDEO_ID acima)
+  renderHeroVideo(HERO_VIDEO_ID);
 })();
