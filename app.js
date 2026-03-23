@@ -108,10 +108,17 @@ function navTo(page) {
   if (page === 'discover' && document.getElementById('feedGrid').children.length <= 1) loadFeed();
 }
 
-function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
-function closeSidebar()  {
+function toggleSidebar() {
   const sb = document.getElementById('sidebar');
-  if (window.innerWidth <= 768) sb.classList.remove('open');
+  const ov = document.getElementById('sidebarOverlay');
+  const isOpen = sb.classList.toggle('open');
+  ov.classList.toggle('visible', isOpen);
+}
+function closeSidebar() {
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebarOverlay');
+  sb.classList.remove('open');
+  ov.classList.remove('visible');
 }
 
 // ── Dashboard Hero Video ──────────────────────────────────────────────────────
@@ -647,6 +654,32 @@ async function exportPDF(){
     refreshStatus();
   }catch(e){errBox('exportResult',e.message);}
 }
+
+// ── Swipe to open/close sidebar (mobile) ─────────────────────────────────────
+(function initSwipe() {
+  let startX = 0, startY = 0;
+  const THRESHOLD = 50, EDGE = 30;
+
+  document.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+
+  document.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = Math.abs(e.changedTouches[0].clientY - startY);
+    if (dy > 60) return; // vertical scroll — ignore
+    const sb = document.getElementById('sidebar');
+    // Swipe right from left edge → open
+    if (dx > THRESHOLD && startX < EDGE && !sb.classList.contains('open')) {
+      toggleSidebar();
+    }
+    // Swipe left when open → close
+    if (dx < -THRESHOLD && sb.classList.contains('open')) {
+      closeSidebar();
+    }
+  }, { passive: true });
+})();
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (function init() {
