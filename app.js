@@ -161,9 +161,9 @@ function setFeedType(type, el) {
 }
 async function loadFeed() {
   const grid = document.getElementById('feedGrid');
-  grid.innerHTML = `<div class="loading-row"><svg class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Carregando ${feedQty} vídeos...</div>`;
+  grid.innerHTML = `<div class="loading-row"><svg class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Carregando ${feedQty} vídeo${feedType!=='all'?' ('+feedType+'s)':''}...</div>`;
   try {
-    // API max is 50 per call — batch if needed
+    // O servidor filtra por duração real — passamos videoType
     const batchSize = 50;
     const batches = Math.ceil(feedQty / batchSize);
     let items = [];
@@ -171,23 +171,23 @@ async function loadFeed() {
       const thisMax = Math.min(batchSize, feedQty - items.length);
       const params = new URLSearchParams({ region: feedRegion, max: thisMax });
       if (feedCategory) params.set('category', feedCategory);
-      if (feedType === 'long') params.set('videoDuration', 'long');
-      if (feedType === 'short') params.set('videoDuration', 'short');
+      if (feedType !== 'all') params.set('videoType', feedType); // short | long
       const batch = await api(`/api/trending?${params.toString()}`);
       items = items.concat(batch);
-      if (batch.length < thisMax) break; // API returned less than asked
+      if (batch.length < thisMax) break;
     }
-    if (!items.length) { grid.innerHTML = `<div class="alert alert-info">Nenhum vídeo encontrado.</div>`; return; }
+    if (!items.length) { grid.innerHTML = `<div class="alert alert-info">Nenhum vídeo ${feedType!=='all'?'do tipo "'+feedType+'"':''} encontrado. Tente outra categoria ou tipo.</div>`; return; }
     grid.innerHTML = items.map(v => {
-      const views = parseInt(v.views||0);
-      const likes = parseInt(v.likes||0);
+      const views = parseInt(v.views||0), likes = parseInt(v.likes||0);
       const likeR = views>0 ? ((likes/views)*100).toFixed(1) : '0';
       let viralScore = 0;
       if(views>1000000)viralScore+=40; else if(views>100000)viralScore+=25; else if(views>10000)viralScore+=10;
       if(parseFloat(likeR)>5)viralScore+=30; else if(parseFloat(likeR)>2)viralScore+=15;
       viralScore = Math.min(viralScore+20, 99);
       const viralColor = viralScore>=70?'#ff3333':viralScore>=40?'#ffd93d':'#4ade80';
+      const isShort = v.totalSeconds > 0 && v.totalSeconds <= 60;
       return `<div class="video-card">
+        ${isShort?`<div style="position:absolute;top:6px;left:6px;background:#ff3333;color:#fff;font-size:8px;font-family:var(--mono);font-weight:700;padding:2px 6px;border-radius:4px;z-index:2">SHORT</div>`:''}
         ${v.thumbnail?`<img class="video-card-thumb" src="${v.thumbnail}" alt="" loading="lazy" onerror="this.style.display='none'">`:`<div class="video-card-thumb-placeholder">🎬</div>`}
         <div class="video-card-body">
           <div class="video-card-title">${v.title}</div>
@@ -268,9 +268,48 @@ async function deepAnalysis() {
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">${cards}</div>
       ${bestVid?`<div><div class="field-label" style="margin-bottom:8px">🏆 Melhor vídeo recente</div>${bestVid}</div>`:''}
       ${worstVid?`<div><div class="field-label" style="margin-bottom:8px">📉 Menor performance</div>${worstVid}</div>`:''}
+      <button class="btn btn-full" onclick="analisarCanalIA()" style="background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff">
+        🧠 Análise Estratégica com Mistral AI
+      </button>
+      <div id="iaCanalAnalysis"></div>
     </div>`;
+    window._lastChannelData = d;
     refreshStatus();
   } catch(e) { errBox('deepResult',e.message); }
+}
+
+// ── Análise IA de Canal (Mistral) ─────────────────────────────────────────────
+async function analisarCanalIA() {
+  const el = document.getElementById('iaCanalAnalysis');
+  if (!el || !window._lastChannelData) return;
+  el.innerHTML = `<div class="loading-row"><svg class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Mistral AI analisando o canal...</div>`;
+  try {
+    const { analysis } = await api('/api/ia/analisar-canal', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channelData: window._lastChannelData }),
+    });
+    const scoreColor = s => s>=70?'#4ade80':s>=40?'#ffd93d':'#ff6b6b';
+    el.innerHTML = `<div class="ia-result" style="border-color:rgba(168,85,247,.3);background:rgba(168,85,247,.05)">
+      <div class="ia-result-label" style="color:rgba(168,85,247,.8)">🧠 Análise Estratégica — Mistral AI</div>
+      <p style="font-size:13px;line-height:1.7;color:var(--text);margin-bottom:14px">${analysis.resumo}</p>
+      <div class="card" style="padding:10px;text-align:center;margin-bottom:14px">
+        <div style="font-size:28px;font-weight:800;font-family:var(--mono);color:${scoreColor(analysis.score_canal)}">${analysis.score_canal}<span style="font-size:14px;color:var(--muted)">/100</span></div>
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Score do Canal</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div><div class="field-label" style="color:#4ade80;margin-bottom:8px">✅ Forças</div>${(analysis.pontos_fortes||[]).map(p=>`<div style="font-size:12px;color:rgba(255,255,255,.7);padding:5px 0;border-bottom:1px solid var(--border)">• ${p}</div>`).join('')}</div>
+        <div><div class="field-label" style="color:#ff6b6b;margin-bottom:8px">⚠ Fraquezas</div>${(analysis.pontos_fracos||[]).map(p=>`<div style="font-size:12px;color:rgba(255,255,255,.7);padding:5px 0;border-bottom:1px solid var(--border)">• ${p}</div>`).join('')}</div>
+      </div>
+      <div class="field-label" style="color:#22d3ee;margin-bottom:8px">🚀 Oportunidades</div>
+      ${(analysis.oportunidades||[]).map(o=>`<div style="font-size:12px;color:rgba(255,255,255,.7);padding:6px 0;border-bottom:1px solid var(--border)">• ${o}</div>`).join('')}
+      <div class="field-label" style="color:#ffd93d;margin:12px 0 8px">💡 Recomendações</div>
+      ${(analysis.recomendacoes||[]).map((r,i)=>`<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)"><span style="font-size:11px;font-family:var(--mono);color:#ffd93d;font-weight:700;flex-shrink:0">${i+1}</span><span style="font-size:12px;color:rgba(255,255,255,.7);line-height:1.6">${r}</span></div>`).join('')}
+      <div style="margin-top:14px;padding:12px;background:rgba(168,85,247,.1);border-radius:9px;border:1px solid rgba(168,85,247,.2)">
+        <div style="font-size:10px;color:rgba(168,85,247,.7);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Veredicto Estratégico</div>
+        <div style="font-size:13px;font-weight:700;color:#fff">${analysis.veredicto}</div>
+      </div>
+    </div>`;
+  } catch(e) { el.innerHTML = `<div class="alert alert-err">⚠ ${e.message}</div>`; }
 }
 
 // ── Vídeo ─────────────────────────────────────────────────────────────────────
@@ -279,6 +318,7 @@ async function analyzeVideo() {
   loading('videoResult');
   try {
     const v = await api(`/api/video?id=${encodeURIComponent(extractVideoId(val))}`);
+    window._lastVideoData = { ...v, viralScore: 0 };
     document.getElementById('videoResult').innerHTML = `<div class="gap-col">
       ${v.thumbnail?`<img class="thumb" src="${v.thumbnail}" alt="">`:''}
       <div><div style="font-size:16px;font-weight:800;line-height:1.4">${v.title}</div><div style="font-size:11px;color:var(--muted);margin-top:6px">${v.channelTitle} · ${fmtDate(v.publishedAt)} · ⏱ ${fmtDur(v.duration)}</div></div>
@@ -288,6 +328,10 @@ async function analyzeVideo() {
         ${statCard(ICO.msg,'Comentários',fmtNum(v.comments),'#4ade80')}
         ${statCard(ICO.trend,'Engajamento',v.engagement+'%','#22d3ee')}
       </div>
+      <button class="btn btn-full" onclick="analisarVideoIA()" style="background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff">
+        🧠 Análise Completa com Mistral AI
+      </button>
+      <div id="iaVideoAnalysis"></div>
     </div>`;
     refreshStatus();
   } catch(e) { errBox('videoResult',e.message); }
@@ -307,6 +351,8 @@ async function reverseEngineer() {
       {label:'Emoji no título',ok:d.titleAnalysis.hasEmoji},{label:'5-12 palavras',ok:d.titleAnalysis.wordCount>=5&&d.titleAnalysis.wordCount<=12},
       {label:'40-70 chars',ok:d.titleAnalysis.length>=40&&d.titleAnalysis.length<=70},{label:'Descrição longa',ok:d.descriptionLength>200},
     ].map(c=>`<div class="check-item"><span style="color:${c.ok?'var(--green)':'rgba(255,255,255,.25)'}">${c.ok?'✓':'✗'}</span><span style="color:${c.ok?'var(--text)':'var(--muted)'}">${c.label}</span></div>`).join('');
+    // Guarda os dados do vídeo para análise IA
+    window._lastVideoData = d;
     document.getElementById('reverseResult').innerHTML = `<div class="gap-col">
       ${d.thumbnail?`<div class="re-hero"><img src="${d.thumbnail}" alt=""><div class="re-hero-overlay"><div class="re-hero-title">${d.title}</div><div class="re-hero-ch">${d.channelTitle} · ${fmtDate(d.publishedAt)}</div></div></div>`:''}
       <div class="re-stats">
@@ -329,9 +375,45 @@ async function reverseEngineer() {
         <div class="title-checks">${checks}</div>
       </div>
       ${d.tags.length>0?`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div class="field-label">Tags (${d.tagCount})</div><button onclick="navigator.clipboard.writeText('${d.tags.join(', ')}');this.textContent='Copiado!';setTimeout(()=>this.textContent='Copiar',1500)" class="btn btn-ghost" style="padding:5px 11px;font-size:11px">Copiar</button></div><div>${d.tags.slice(0,20).map(t=>`<span class="tag-chip">${t}</span>`).join('')}</div></div>`:''}
+      <!-- Botão análise IA -->
+      <button class="btn btn-red btn-full" onclick="analisarVideoIA()" style="background:linear-gradient(135deg,#a855f7,#7c3aed)">
+        🧠 Análise Completa com Mistral AI — O que funcionou e o que melhorar
+      </button>
+      <div id="iaVideoAnalysis"></div>
     </div>`;
     refreshStatus();
   } catch(e) { errBox('reverseResult',e.message); }
+}
+
+// ── Análise IA de Vídeo (Mistral) ─────────────────────────────────────────────
+async function analisarVideoIA() {
+  const el = document.getElementById('iaVideoAnalysis');
+  if (!el || !window._lastVideoData) return;
+  el.innerHTML = `<div class="loading-row"><svg class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Mistral AI analisando o vídeo...</div>`;
+  try {
+    const { analysis } = await api('/api/ia/analisar-video', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoData: window._lastVideoData }),
+    });
+    const scoreColor = s => s>=70?'#4ade80':s>=40?'#ffd93d':'#ff6b6b';
+    el.innerHTML = `<div class="ia-result" style="border-color:rgba(168,85,247,.3);background:rgba(168,85,247,.05)">
+      <div class="ia-result-label" style="color:rgba(168,85,247,.8)">🧠 Análise Mistral AI</div>
+      <p style="font-size:13px;line-height:1.7;color:var(--text);margin-bottom:16px">${analysis.resumo}</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:16px">
+        ${[['Geral',analysis.score_geral],['Título',analysis.score_titulo],['Engajamento',analysis.score_engajamento],['SEO',analysis.score_seo]].map(([l,s])=>`<div class="card" style="padding:10px;text-align:center"><div style="font-size:20px;font-weight:800;font-family:var(--mono);color:${scoreColor(s)}">${s}</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px">${l}</div></div>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div><div class="field-label" style="color:#4ade80;margin-bottom:8px">✅ Pontos Fortes</div>${(analysis.pontos_fortes||[]).map(p=>`<div style="font-size:12px;color:rgba(255,255,255,.7);padding:6px 0;border-bottom:1px solid var(--border);line-height:1.5">• ${p}</div>`).join('')}</div>
+        <div><div class="field-label" style="color:#ff6b6b;margin-bottom:8px">⚠ Pontos Fracos</div>${(analysis.pontos_fracos||[]).map(p=>`<div style="font-size:12px;color:rgba(255,255,255,.7);padding:6px 0;border-bottom:1px solid var(--border);line-height:1.5">• ${p}</div>`).join('')}</div>
+      </div>
+      <div class="field-label" style="color:#ffd93d;margin-bottom:8px">💡 Recomendações</div>
+      ${(analysis.recomendacoes||[]).map((r,i)=>`<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:11px;font-family:var(--mono);color:#ffd93d;font-weight:700;flex-shrink:0">${i+1}</span><span style="font-size:12px;color:rgba(255,255,255,.7);line-height:1.6">${r}</span></div>`).join('')}
+      <div style="margin-top:14px;padding:12px;background:rgba(168,85,247,.1);border-radius:9px;border:1px solid rgba(168,85,247,.2)">
+        <div style="font-size:10px;color:rgba(168,85,247,.7);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Veredicto Final</div>
+        <div style="font-size:13px;font-weight:700;color:#fff">${analysis.veredicto}</div>
+      </div>
+    </div>`;
+  } catch(e) { el.innerHTML = `<div class="alert alert-err">⚠ ${e.message}</div>`; }
 }
 
 // ── Comparar ──────────────────────────────────────────────────────────────────
@@ -495,40 +577,116 @@ function analyzeSEO() {
 
 // ── Pesquisa ──────────────────────────────────────────────────────────────────
 const SUBNICHOES = {
-  'Animais':['Cães','Gatos','Animais Selvagens','Aquários','Aves','Répteis','Fazenda'],
-  'Arte e Design':['Desenho','Pintura','Design Gráfico','Fotografia','Escultura','Tatuagem','Origami'],
-  'Automotivo':['Carros','Motos','Caminhões','Pickups','Trucks','Manufatura','Reconstrução','Modificações','Drift','Rally'],
-  'Aventura':['Escalada','Trilhas','Mergulho','Camping','Sobrevivência','Parapente','Motocross'],
-  'Cinema':['Análise de Filmes','Trailers','Bastidores','Críticas','Clássicos','Animação'],
-  'Comédia':['Stand Up','Paródia','Sketches','Pegadinhas','Memes'],
-  'Culinária':['Receitas','Doces','Vegano','Churrasco','Confeitaria','Fitness Food','Comida Japonesa','Confeitaria'],
-  'Documentário':['Dark Hollywood','Desastres','História industrial','História oculta','Histórias de empresas','Storytelling Científico','True Crime','Mistérios'],
-  'Educação':['Ciência','Matemática','Idiomas','Vestibular','Concursos','Filosofia','Astronomia'],
-  'Empreendedorismo':['Startups','Marketing Digital','Dropshipping','Freelancer','Negócios Online'],
-  'Entretenimento':['Reacts','Compilações','Vlogs','Lifestyle','Experimentos','Desafios'],
-  'Esportes':['Futebol','NBA','UFC','F1','Natação','Esportes Radicais','Basquete','Tênis'],
-  'Finanças':['Investimentos','Crypto','Renda Passiva','Bolsa de Valores','Imposto de Renda','Dívidas'],
-  'Fitness':['Musculação','Crossfit','Yoga','Corrida','Nutrição Esportiva','Calistenia'],
-  'Gaming':['Gameplay','Reviews de jogos','Esports','Tutoriais','Indie Games','RPG','FPS','Minecraft'],
-  'História':['Batalhas','História Antiga','Segunda Guerra','Civilizações','Nostalgia','Imperadores'],
-  'Humor':['Stand Up','Paródia','Sketches','Memes','Comédia Dramédia'],
-  'Idiomas':['Inglês','Espanhol','Japonês','Coreano','Francês','Mandarim'],
-  'Lifestyle':['Minimalismo','Rotina Matinal','Self Help','Desenvolvimento Pessoal','Produtividade'],
-  'Manufatura':['Processamento','Construção','Fábricas','Indústria','Ferramentaria'],
-  'Moda':['Looks','Tendências','Streetwear','Unboxing Roupas','Brechó'],
-  'Motivação':['Mentalidade','Disciplina','Autoconhecimento','Liderança','Foco'],
-  'Música':['Clipes','Covers','Instrumentos','Making Of','Rankings','Beat Making'],
-  'Negócios':['Marketing','Vendas','Gestão','Liderança','B2B','Franquias'],
-  'Nostalgia':['Anos 80','Anos 90','Retro Games','TV Antiga','Cultura Pop'],
-  'Notícias':['Política','Economia','Internacional','Tecnologia','Meio Ambiente'],
-  'Política':['Nacional','Internacional','Análise','Debates','Geopolítica'],
-  'Psicologia':['Comportamento humano','Autoconhecimento','Motivação','Relacionamentos','Ansiedade','Narcisismo'],
-  'Religião':['Espiritualidade','Bíblia','Filosofia Cristã','Budismo','Umbanda'],
-  'Saúde':['Medicina','Saúde Mental','Dieta','Yoga','Bem-estar'],
-  'Tecnologia':['AI','Programação','Gadgets','Reviews Tech','Cybersecurity','Linux','Robótica'],
-  'True Crime':['Casos Reais','Serial Killers','Crimes Famosos','Documentários Criminais'],
-  'TV e Séries':['Reviews','Análises','Bastidores','Rankings','Maratonas'],
-  'Viagem':['Mochilão','Destinos Nacionais','Europa','Ásia','América Latina','Dicas de Viagem'],
+  'Games — Gameplay':['Gameplay solo comentado','Gameplay co-op','Gameplay com facecam','Gameplay de lançamentos','Gameplay noturno','Gameplay didático','Gameplay competitivo','Gameplay de jogos gratuitos','Gameplay de jogos obscuros'],
+  'Games — Speedrun':['Speedrun qualquer%','Speedrun 100%','Speedrun de jogos clássicos','Speedrun de RPG','Speedrun de horror','Speedrun de jogos indie','Speedrun colaborativo'],
+  'Games — Retrô':['Reviews de jogos NES/SNES','Gameplay Mega Drive','Nostalgia anos 90','Emuladores','História dos consoles','Jogos de fliperama clássicos','PS1 e PS2 clássicos'],
+  'Games — RPG':['JRPGs','RPGs ocidentais','RPG de mesa (D&D)','MMORPGs','Lore de RPGs','Builds e guias','RPGs indie','RPGs pixel art'],
+  'Games — FPS':['Counter-Strike','Valorant','Call of Duty','Apex Legends','Tutoriais de mira','Configurações para FPS','Ranked FPS','FPS indie'],
+  'Games — MOBA':['League of Legends','Dota 2','Mobile Legends','Guias de heróis','Análise de meta','Ranked climbing','Tier list'],
+  'Games — Battle Royale':['Fortnite','PUBG','Free Fire','Warzone','Dicas e estratégias','Ranked competitivo','Battle Royale mobile'],
+  'Games — Simuladores':['Flight simulator','Simulador de fazenda','Euro Truck Simulator','The Sims','Simulador espacial','Simulador de cidade'],
+  'Games — Terror':['Gameplay de terror com reação','Terror indie','Terror clássico (RE, Silent Hill)','Terror cooperativo','Terror VR','Terror narrativo'],
+  'Games — Indie':['Reviews indie','Indie de plataforma','Indie de narrativa','Indie pixel art','Indie de terror','Jogos indie brasileiros'],
+  'Games — E-sports':['Campeonatos','Análise de jogadas pro','Bastidores de equipes','História do e-sports','Times brasileiros'],
+  'Games — Minecraft':['Survival','Criativo e construções','Mods e plugins','Servidores multiplayer','Speedrun','Redstone'],
+  'Games — GTA':['GTA Online','Roleplay FiveM','Mods no GTA','Easter eggs','GTA retrô'],
+  'Games — Mobile':['Reviews mobile','Gacha games','Battle royale mobile','RPGs mobile','Estratégia mobile'],
+  'Tecnologia — Smartphones':['Review de lançamentos','Review de custo-benefício','Review de câmera','iPhones','Samsung','Smartphones chineses','Dobráveis'],
+  'Tecnologia — Programação':['Python para iniciantes','JavaScript','HTML e CSS','React','Backend Node.js','SQL','Flutter','Git','APIs'],
+  'Tecnologia — IA':['ChatGPT e prompts','Machine learning','IA para imagens','IA para produtividade','IA no mercado de trabalho','Ferramentas IA gratuitas','Automação com IA'],
+  'Tecnologia — Cibersegurança':['Hacking ético','Pentest','Segurança de redes','CTF','Kali Linux','Engenharia social','Forense digital'],
+  'Tecnologia — Linux':['Linux para iniciantes','Ubuntu/Fedora','Terminal','Personalização (ricing)','Arch Linux','Scripts e automação'],
+  'Tecnologia — Apple':['Reviews iPhones','Reviews MacBooks','iOS dicas','Apple Watch','AirPods','macOS tutoriais'],
+  'Tecnologia — PCs':['Montar PC do zero','GPUs reviews','CPUs reviews','RAM e SSD','Refrigeração','PC gamer vs workstation','Upgrades'],
+  'Tecnologia — Impressão 3D':['Impressoras 3D reviews','Modelagem 3D','Materiais de impressão','Impressão em resina','Negócio com impressão 3D'],
+  'Tecnologia — Drones':['Reviews de drones','Fotografia aérea','Drones FPV','Corridas de drone','DJI profissional'],
+  'Tecnologia — Smart Home':['Automação residencial','Alexa/Google Home','Câmeras de segurança','Home Assistant','Smart home barata'],
+  'Finanças — Bolsa':['Bolsa para iniciantes','Análise técnica','Dividendos','Day trade','FIIs','ETFs','BDRs','Swing trade'],
+  'Finanças — Criptomoedas':['Bitcoin','Ethereum','DeFi','NFTs','Staking','Análise técnica cripto','Carteiras cripto'],
+  'Finanças — Renda Passiva':['Dividendos','Renda passiva digital','YouTube monetização','Afiliados','FIIs','Dropshipping','Print on demand'],
+  'Finanças — Empreendedorismo':['Abrir negócio do zero','MEI','Negócios com pouco capital','Franquias','Empreendedorismo digital','Escalando negócio'],
+  'Finanças — Marketing Digital':['SEO','Google Ads / Meta Ads','Email marketing','Funil de vendas','Copywriting','Marketing de influência'],
+  'Finanças — Finanças Pessoais':['Sair das dívidas','Orçamento familiar','Reserva de emergência','Economizar','Planejamento financeiro','Cartão de crédito'],
+  'Finanças — E-commerce':['Loja virtual do zero','Mercado Livre','Shopee','Gestão de estoque','Logística','E-commerce de moda'],
+  'Finanças — Imóveis':['Primeiro imóvel','Financiamento imobiliário','FIIs vs imóveis','Airbnb','Flipping de imóveis'],
+  'Saúde — Musculação':['Musculação para iniciantes','Hipertrofia','Powerlifting','Musculação feminina','Musculação em casa','Dieta para massa'],
+  'Saúde — Crossfit':['Crossfit para iniciantes','WODs','Crossfit feminino','Crossfit competitivo','Nutrição para crossfit'],
+  'Saúde — Yoga':['Yoga para iniciantes','Yoga para ansiedade','Yoga para dor nas costas','Ashtanga','Vinyasa','Yoga e meditação'],
+  'Saúde — Corrida':['Corrida para iniciantes','Treino para maratona','HIIT corrida','Nutrição para corredores','Lesões e prevenção'],
+  'Saúde — Emagrecimento':['Emagrecimento saudável','Low carb','Jejum intermitente','Emagrecimento sem academia','Psicologia do emagrecimento'],
+  'Saúde — Nutrição':['Macronutrientes','Cardápio semanal','Alimentação anti-inflamatória','Dieta mediterrânea','Superalimentos'],
+  'Saúde — Vegano':['Como se tornar vegano','Proteína vegana','Receitas veganas','Veganismo e musculação','Veganismo ético'],
+  'Saúde — Saúde Mental':['Ansiedade','Depressão','Burnout','Terapia online','Técnicas de relaxamento','TDAH adultos','TOC'],
+  'Saúde — Meditação':['Meditação para iniciantes','Meditação guiada','Mindfulness','Meditação para dormir','Meditação e neurociência'],
+  'Saúde — Artes Marciais':['Muay Thai','Jiu-Jitsu','Boxe','MMA','Karatê','Judô','Krav Maga'],
+  'Culinária — Receitas Rápidas':['Prontas em 15 minutos','Marmitas','Café da manhã rápido','Lanches','Airfryer','Micro-ondas'],
+  'Culinária — Confeitaria':['Bolos decorados','Cupcakes','Brigadeiros gourmet','Macarons','Chocolate artesanal','Confeitaria vegana'],
+  'Culinária — Churrasco':['Churrasco para iniciantes','Cortes de carne','Churrasco gaúcho','BBQ americano','Defumação','Churrasco vegetariano'],
+  'Culinária — Internacional':['Italiana','Japonesa','Mexicana','Indiana','Francesa','Árabe','Tailandesa','Coreana'],
+  'Culinária — Food Vlog':['O que eu como em um dia','Food vlog em viagens','Testando restaurantes','Comida de rua','Comparativo de marcas'],
+  'Culinária — Drinks':['Coquetéis clássicos','Drinks sem álcool (mocktails)','Drinks com gin','Drinks com whisky','Home bar'],
+  'Culinária — Panificação':['Pão caseiro','Sourdough (fermentação natural)','Pães sem glúten','Croissants','Pão de queijo'],
+  'Culinária — Fit':['Receitas para ganho de massa','Receitas para emagrecer','Marmitas fit','Sobremesas fit','Low carb fit'],
+  'Arte — Desenho':['Desenho para iniciantes','Retratos e rostos','Personagens','Mangá','Anatomia','Sketchbook'],
+  'Arte — Pintura':['Pintura acrílica','Aquarela','Pintura a óleo','Pintura abstrata','Fluid art'],
+  'Arte — Design Gráfico':['Canva','Adobe Illustrator','Photoshop','Tipografia','Logotipos','UI/UX design'],
+  'Arte — Fotografia':['Fotografia para iniciantes','Retratos','Paisagens','Produtos','Fotografia noturna','Lightroom'],
+  'Arte — Edição de Vídeo':['Premiere','DaVinci Resolve','Final Cut','Edição mobile','Reels e Shorts','VFX básicos'],
+  'Arte — Animação':['Animação 2D','Animação 3D Blender','Stop motion','Motion graphics','After Effects'],
+  'Arte — Quadrinhos':['Como criar HQs','Mangá','Webcomics','Colorização','Lettering'],
+  'Arte — Tatuagem':['Estilos de tatuagem','Fineline','Tradicional americana','Japonesa','Cuidados pós-tatuagem'],
+  'Música — Covers':['Covers pop nacional','Covers acústicos','Covers ao piano','Covers de rock','Covers de MPB'],
+  'Música — Instrumento':['Violão','Guitarra elétrica','Piano','Bateria','Baixo','Ukulele','Violino'],
+  'Música — Beat Making':['FL Studio','Ableton','Beats de trap','Funk e batidão','Lofi hip hop','Sound design'],
+  'Música — Teoria Musical':['Escalas','Acordes e harmonias','Leitura de partituras','Improvisação','Composição'],
+  'Música — DJing':['DJ para iniciantes','Equipamentos de DJ','Mixagem','House/Techno/Drum and bass','Serato/Rekordbox'],
+  'Música — Canto':['Canto para iniciantes','Técnica vocal','Canto gospel','Gravação de voz em home studio'],
+  'Viagem — Vlogs':['Vlog solo','Vlog em casal','Vlog em família','Vlog econômico','Vlog de luxo','Vlog de intercâmbio'],
+  'Viagem — Mochilão':['Mochilão para iniciantes','América do Sul','Europa','Ásia','Mochilão solo feminino','Trabalho remoto'],
+  'Viagem — Nacional':['Nordeste','Sul','Amazônia','Rio de Janeiro','São Paulo','Praias','Cachoeiras'],
+  'Viagem — Van Life':['Van life para iniciantes','Como converter uma van','Van life no Brasil','Energia solar em vans'],
+  'Viagem — Aventura':['Mergulho','Surf','Kitesurf','Trilhas','Montanhismo','Camping','Rafting'],
+  'Educação — História':['Brasil','Antiga','Medieval','Segunda Guerra','América Latina','Revoluções','Curiosidades históricas'],
+  'Educação — Ciências':['Biologia','Física','Química','Astronomia','Ecologia','Neurociência','Genética'],
+  'Educação — Filosofia':['Grega antiga','Estoicismo','Existencialismo','Ética e moral','Filosofia oriental'],
+  'Educação — Psicologia':['Comportamental','Cognitiva','Psicanálise','Psicologia positiva','Relacionamentos','Vieses cognitivos'],
+  'Educação — Idiomas':['Inglês iniciante','Inglês intermediário','Espanhol','Japonês','Mandarim','TOEFL/IELTS'],
+  'Educação — Literatura':['Resenhas de livros','Clássicos','Literatura brasileira','Ficção científica','BookTube'],
+  'Educação — Matemática':['Álgebra','Geometria','Cálculo','Estatística','Matemática financeira','ENEM'],
+  'Educação — Astronomia':['Sistema solar','Buracos negros','SpaceX/NASA','Telescópios','Missões espaciais'],
+  'Educação — Direito':['Direitos do consumidor','Trabalhista','Direito digital','Direito de família','Direito penal'],
+  'Moda — Looks':['Looks para o dia a dia','Looks para o trabalho','Looks casuais','Looks minimalistas','Looks plus size'],
+  'Moda — Maquiagem':['Maquiagem para iniciantes','Natural/no beat','Pele negra','Pele madura','Contorno','Tendências'],
+  'Moda — Skincare':['Rotina diurna/noturna','Pele oleosa','Pele seca','Ácidos (vitamina C, retinol)','Skincare masculino'],
+  'Moda — Cabelo':['Cabelo cacheado','Transição capilar','Coloração','Penteados','Queda de cabelo e tratamentos'],
+  'Moda — Perfumaria':['Como escolher perfume','Famílias olfativas','Dupes de perfume','Perfumes de nicho','Decants'],
+  'Moda — Nail Art':['Nail art para iniciantes','Unhas em gel','Nail art floral','Nail art geométrica','Tendências'],
+  'Casa — Decoração':['Para iniciantes','Sala de estar','Quarto','Home office','Escandinavo','Industrial','Minimalista'],
+  'Casa — Organização':['Método KonMari','Guarda-roupa','Cozinha','Minimalismo','Organização digital'],
+  'Casa — Reforma':['Banheiro','Cozinha','Instalação elétrica','Hidráulica','Gesso e drywall','Reforma barata'],
+  'Casa — Jardinagem':['Plantas de interior','Horta em casa','Jardim vertical','Suculentas','Compostagem'],
+  'Casa — DIY':['Móveis DIY','DIY com pallets','DIY com resina epóxi','DIY de luminária','DIY sustentável'],
+  'Animais — Cachorros':['Cuidados básicos','Adestramento','Raças','Filhotes','Saúde e vacinação','Grooming','Adoção'],
+  'Animais — Gatos':['Comportamento felino','Raças de gatos','Castração','Enriquecimento ambiental','Adoção'],
+  'Animais — Aves':['Papagaios','Periquitos australianos','Calopsitas','Canários','Ensinar aves a falar'],
+  'Animais — Aquarismo':['Aquário de água doce','Aquário marinho','Plantado','Qualidade da água','Camarões'],
+  'Animais — Répteis':['Tartarugas','Lagartos','Cobras domésticas','Gecko leopardo','Dragão barbudo'],
+  'Entretenimento — Comédia':['Esquetes de situações','Paródias','Pegadinhas','Stand-up','Memes'],
+  'Entretenimento — Reações':['Reação a vídeos virais','Reação a músicas','Reação a trailers','Reação a games'],
+  'Entretenimento — Desafios':['Desafios de comida','Desafios de 24 horas','Desafios físicos','Desafios virais'],
+  'Lifestyle — Desenvolvimento Pessoal':['Metas e objetivos','Hábitos','Disciplina','Inteligência emocional','Comunicação'],
+  'Lifestyle — Produtividade':['Técnica Pomodoro','Gestão do tempo','Home office','Deep work','Bullet journal'],
+  'Lifestyle — Espiritualidade':['Espiritualidade afro-brasileira','Budismo','Hinduísmo','Cristais','Tarô','Chakras'],
+  'Lifestyle — Astrologia':['Signos','Mapa astral','Casas astrológicas','Planetas','Retrogradação de Mercúrio'],
+  'Lifestyle — Relacionamentos':['Relacionamentos saudáveis','Comunicação no casal','Término','Namoro apps','Casamento'],
+  'Lifestyle — Minimalismo':['Consumo consciente','Minimalismo digital','Desapego','Slow living','Minimalismo e dinheiro'],
+  'Automóveis — Reviews':['Carros populares','SUVs','Carros de luxo','Carros elétricos','Picapes','Custo-benefício'],
+  'Automóveis — Motos':['Motos populares','Motos esportivas','Motos adventure','Motos elétricas','Mototurismo'],
+  'Automóveis — Mecânica DIY':['Trocar óleo','Pastilha de freio','Manutenção preventiva','Diagnóstico elétrico'],
+  'Automóveis — Clássicos':['Fusca','Opala','Muscle cars','Restauração','Eventos de clássicos'],
+  'Automóveis — Tuning':['Suspensão e rodas','Motor e performance','Envelopamento','Som automotivo','LED automotivo'],
+  'Automóveis — Corridas':['Fórmula 1','Stock Car','Drift','Kart','Rally','MotoGP','NASCAR'],
+  'Automóveis — Elétricos':['Carros elétricos reviews','Infraestrutura de recarga','Custo elétrico vs combustão','Tesla'],
 };
 function onNichoChange() {
   const nicho=document.getElementById('filterNicho').value, sub=document.getElementById('filterSubnicho');
@@ -548,13 +706,30 @@ function setSearchMode(mode,el){
 }
 
 async function doSearch() {
-  const q=document.getElementById('searchInput').value.trim(), nicho=document.getElementById('filterNicho').value, subnicho=document.getElementById('filterSubnicho').value, idioma=document.getElementById('filterIdioma').value, periodo=document.getElementById('filterPeriodo').value, videos=document.getElementById('filterVideos').value, order=document.getElementById('filterOrder').value;
+  const q=document.getElementById('searchInput').value.trim();
+  const nicho=document.getElementById('filterNicho').value;
+  const subnicho=document.getElementById('filterSubnicho').value;
+  const idioma=document.getElementById('filterIdioma').value;
+  const periodo=document.getElementById('filterPeriodo').value;
+  const videos=document.getElementById('filterVideos').value;
+  const order=document.getElementById('filterOrder').value;
+  const dateFrom=document.getElementById('filterDateFrom')?.value||'';
+  const dateTo=document.getElementById('filterDateTo')?.value||'';
   if(!q&&!nicho&&!subnicho){errBox('searchResult','Digite algo ou selecione um nicho.');return;}
   loading('searchResult');
   try {
-    const p=new URLSearchParams({max:16,order});
-    if(q)p.set('q',q);if(nicho)p.set('nicho',nicho);if(subnicho)p.set('subnicho',subnicho);if(idioma)p.set('idioma',idioma);if(periodo)p.set('periodo',periodo);if(videos)p.set('videos',videos);
-    renderSearchResults(await api(`/api/search?${p.toString()}`)); refreshStatus();
+    const p=new URLSearchParams({max:20,order});
+    if(q)p.set('q',q);
+    if(nicho)p.set('nicho',nicho);
+    if(subnicho)p.set('subnicho',subnicho);
+    if(idioma)p.set('idioma',idioma);
+    if(videos)p.set('videos',videos);
+    // Data personalizada tem prioridade sobre período
+    if(dateFrom) p.set('publishedAfter', dateFrom);
+    if(dateTo)   p.set('publishedBefore', dateTo);
+    else if(periodo && !dateFrom) p.set('periodo', periodo);
+    renderSearchResults(await api(`/api/search?${p.toString()}`));
+    refreshStatus();
   } catch(e){errBox('searchResult',e.message);}
 }
 
